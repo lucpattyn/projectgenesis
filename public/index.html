@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Genesis | Primes</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="control-panel">
+        <div>
+          <p class="eyebrow">Artificial Life Research</p>
+          <div class="project-title-row">
+            <h1>Project Genesis</h1>
+            <button id="guide-button" class="guide-button" type="button" aria-haspopup="dialog">Guide</button>
+          </div>
+          <p class="lede">
+            Primes is a minimal digital universe. Phase 13 creates ecological differentiation: local fertility can be exhausted and recovered,
+            while green, blue, and red resources create niches for organisms with different prime expressions.
+          </p>
+        </div>
+
+        <section class="panel-block intro-block">
+          <h2>Generated Physics</h2>
+          <p>
+            Every server tick, each organism spends energy, executes its generated graph, and consumes food only when
+            its generated Consume output permits it. Reproduction can introduce an arithmetic mutation in its child.
+          </p>
+          <p>
+            The browser only visualizes the live world state coming from the server, so what you see is always a
+            snapshot of the real simulation.
+          </p>
+          <p class="ecology-note" id="ecology-note">Loading ecology...</p>
+          <p class="ecology-note" id="productivity-note">Loading primary productivity...</p>
+          <p class="ecology-note" id="chemistry-note">Loading chemistry...</p>
+        </section>
+
+        <section class="panel-block hazard-block">
+          <p class="eyebrow">Ecology Lab</p>
+          <h2>Live Tuning</h2>
+          <label>
+            <span>Food Carrying Capacity</span>
+            <input id="food-target" type="range" min="0.02" max="0.5" step="0.01" />
+            <output id="food-target-value"></output>
+          </label>
+          <p>Food regrows until this fraction of the world contains food. `0.18` means 18% of tiles.</p>
+          <label>
+            <span>Mutation Chance Per Child</span>
+            <input id="mutation-rate" type="range" min="0" max="0.25" step="0.01" />
+            <output id="mutation-rate-value"></output>
+          </label>
+          <p>Each child independently rolls this probability for one arithmetic genome mutation.</p>
+          <label>
+            <span>Signal Emission Energy Cost</span>
+            <input id="signal-cost" type="range" min="0" max="1" step="0.01" />
+            <output id="signal-cost-value"></output>
+          </label>
+          <p>Prime-19 organisms pay this energy cost when their generated Signal Out node writes to the shared field.</p>
+          <h3>Natural Hazard: Fire</h3>
+          <p>Fire needs food as fuel: it ignites and spreads only through food tiles, then burns out. It kills organisms standing on a burning tile.</p>
+          <label class="toggle-label"><input id="fire-enabled" type="checkbox" /> <span>Enable fire</span></label>
+          <label>
+            <span>Ignition Rate</span>
+            <input id="fire-ignition" type="range" min="0" max="0.02" step="0.001" />
+            <output id="fire-ignition-value"></output>
+          </label>
+          <label>
+            <span>Spread Chance</span>
+            <input id="fire-spread" type="range" min="0" max="1" step="0.01" />
+            <output id="fire-spread-value"></output>
+          </label>
+          <label>
+            <span>Burn Duration (ticks)</span>
+            <input id="fire-duration" type="range" min="1" max="20" step="1" />
+            <output id="fire-duration-value"></output>
+          </label>
+        </section>
+
+        <section class="panel-block genesis-block">
+          <p class="eyebrow">Prime Generative Principle</p>
+          <h2>World Recipe Meets Genome</h2>
+          <p>
+            Prime factorization will become the universe's canonical construction language: each prime identifies one
+            irreducible generator, and composites compose them. The server factors both the world number and every
+            organism genome, resolving their prime factors through explicit construction rules.
+          </p>
+          <p>
+            For example, 210 = 2 x 3 x 5 x 7 creates movement, energy, resources, and reproduction but no terrain.
+            The shown world seed makes each experiment repeatable. Phase 8 adds Prime 17 as a raw 3 x 3 neighborhood field; Phase 7 can multiply, divide, or strengthen an
+            offspring's prime recipe, then regenerates its deterministic graph from that factorization.
+          </p>
+        </section>
+
+        <section class="panel-block genome-block">
+          <p class="eyebrow">Phase 8 Spatial Awareness</p>
+          <h2>Inspect a Living Organism</h2>
+          <p class="genome-intro">Click an orange organism to reveal its arithmetic genome, birth mutation, and generated live brain graph.</p>
+          <div id="genome-inspector" class="genome-inspector">
+            <p>Select an organism to inspect its genome.</p>
+          </div>
+        </section>
+
+        <section class="panel-block generator-block">
+          <p class="eyebrow">Phase 3 Prime Registry</p>
+          <h2>Generated World Recipe</h2>
+          <label>
+            <span>World Number</span>
+            <input id="world-number" type="number" min="2" max="9007199254740991" step="1" />
+          </label>
+          <label>
+            <span>Founder Genome</span>
+            <input id="founder-genome" type="number" min="2" max="9007199254740991" step="1" />
+          </label>
+          <p class="recipe-expression" id="recipe-expression">Loading recipe...</p>
+          <p class="generator-status" id="generator-status">Loading generator chain...</p>
+          <div class="generator-list" id="generator-list"></div>
+          <p class="generator-note" id="generator-note"></p>
+        </section>
+
+        <section class="panel-block">
+          <h2>Simulation Control</h2>
+          <div class="button-grid">
+            <button data-action="pause">Pause</button>
+            <button data-action="resume">Resume</button>
+            <button data-action="step">Single Step</button>
+            <button data-action="reset">Reset</button>
+            <button data-action="randomize">Randomize</button>
+            <button id="toggle-grid">Toggle Grid</button>
+          </div>
+        </section>
+
+        <section class="panel-block">
+          <h2>Settings</h2>
+          <label>
+            <span>Simulation Speed</span>
+            <select id="speed-select"></select>
+          </label>
+          <label>
+            <span>Food Growth Rate</span>
+            <input id="food-growth" type="range" min="0" max="1" step="0.01" />
+            <output id="food-growth-value"></output>
+          </label>
+          <label>
+            <span>Initial Population</span>
+            <input id="initial-population" type="range" min="1" max="300" step="1" />
+            <output id="initial-population-value"></output>
+          </label>
+          <label>
+            <span>Universe Seed</span>
+            <input id="universe-seed" type="number" min="0" max="4294967295" step="1" />
+          </label>
+        </section>
+
+        <section class="panel-block">
+          <h2>Legend</h2>
+          <div class="legend-list">
+            <div class="legend-item">
+              <span class="legend-swatch food green-resource"></span>
+              <span>Green resource: digestion-favored</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch food blue-resource"></span>
+              <span>Blue resource: energy-favored</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch food red-resource"></span>
+              <span>Red resource: signal-favored</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch wall"></span>
+              <span>Wall</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch organism"></span>
+              <span>Living organism (genome phenotype)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch birth"></span>
+              <span>Recent reproduction</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch death"></span>
+              <span>Recent death</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch fire"></span>
+              <span>Fire</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch detritus"></span>
+              <span>Detritus: decaying food or remains</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch ash"></span>
+              <span>Ash: food burned by fire</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch nutrients"></span>
+              <span>Nutrients: support local regrowth</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch production"></span>
+              <span>Gold-green pulse: new world resource energy</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-block">
+          <h2>Statistics</h2>
+          <dl class="stats-grid" id="stats-grid"></dl>
+        </section>
+
+        <section class="panel-block telemetry-block">
+          <p class="eyebrow">Experiment Telemetry</p>
+          <h2>Bond Lifecycle</h2>
+          <div id="telemetry-panel"><p>Loading telemetry...</p></div>
+        </section>
+      </aside>
+
+      <main class="viewport-panel">
+        <div class="viewport-header">
+          <div>
+            <p class="eyebrow">Live World</p>
+            <h2>Factorized Physics Layer</h2>
+          </div>
+          <div class="status-pill" id="status-pill">Connecting...</div>
+        </div>
+        <section class="live-brain-panel">
+          <div>
+            <p class="eyebrow">Phase 15 Live Monitor</p>
+            <h3 id="live-brain-title">Generated Brain</h3>
+            <details class="brain-help">
+              <summary>How to read this graph</summary>
+              <p>Green nodes sense the world, blue nodes carry internal state, and orange nodes are actions. Arrows
+                pass a live value from 0 to 1 or more. A purple Persist node, created by Prime 13, reads its prior
+                value for this tick and writes its next value after evaluation. A teal Neighbor state sensor appears when Prime 31 is present; it receives only direct bonded neighbors' prior Prime-13 values. All values are calculated on the server.</p>
+            </details>
+          </div>
+          <div class="live-brain-content" id="live-brain-content"></div>
+          <aside class="phenotype-legend" aria-label="Organism phenotype legend">
+            <p class="eyebrow">Organism Key</p>
+            <div class="phenotype-item"><span class="phenotype-sample body"></span><span>Orange circle: living organism</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample compound"><i></i><i></i><i></i></span><span>Linked cluster of 3+: Prime 31 compound organism</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample facet"></span><span>Gold surface: closed-loop emergent facet</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample transfer"></span><span>Mint pulse: a facet shared meal energy with a weaker member</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample energy"></span><span>Brighter body: more energy</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample persistence"></span><span>Inner ring: Prime 13 persistence</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample spatial"></span><span>Green marks: Prime 17 awareness</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample signal"></span><span>Purple aura: Prime 19 signal output</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample power"></span><span>Gold rings: strengthened prime powers</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample bond"></span><span>Gold links: structural bonds; brighter links hold more reserve energy</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample persistence"></span><span>Teal Neighbor state: direct bonded Prime-13 values enter the graph</span></div>
+          </aside>
+        </section>
+        <div id="world-scroll" aria-label="Scrollable simulation world">
+          <canvas id="world-canvas"></canvas>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="guide-dialog" class="guide-dialog" aria-labelledby="guide-title">
+      <article class="guide-sheet">
+        <header class="guide-header">
+          <div>
+            <p class="eyebrow">Project Genesis Field Guide</p>
+            <h2 id="guide-title">A factorized artificial world</h2>
+            <p>This simulation runs on the server. The browser is a live window into its state and a set of experimental controls.</p>
+          </div>
+          <button id="guide-close" class="guide-close" type="button" aria-label="Close guide">Close</button>
+        </header>
+
+        <div class="guide-content">
+          <section>
+            <h3>1. The central idea</h3>
+            <p>Prime numbers are abstract generator identities. A composite number is a recipe made by multiplying primes. The same prime can have a different explicit meaning in different registries: world physics, organism construction, or cognition. It never has one universal meaning.</p>
+            <p>The project deliberately adds computational capabilities, not instructions such as "avoid fire" or "seek food." Behaviors should arise from generated graphs interacting with the world.</p>
+          </section>
+
+          <section>
+            <h3>2. World number and founder genome</h3>
+            <p><strong>World Number</strong> decides which world generators the server enables. The current chemistry recipe is <code>85470 = 2 x 3 x 5 x 7 x 11 x 37</code>.</p>
+            <p><strong>Founder Genome</strong> is the starting prime recipe for the first organisms. Their descendants inherit it unless arithmetic mutation changes a factor. A genome creates a generated brain graph; the graph is not manually rewritten.</p>
+            <table class="guide-table"><thead><tr><th>Prime</th><th>World meaning</th><th>Organism meaning</th></tr></thead><tbody>
+              <tr><td>2</td><td>Movement physics</td><td>Locomotion</td></tr>
+              <tr><td>3</td><td>Energy accounting</td><td>Metabolism</td></tr>
+              <tr><td>5</td><td>Food resources</td><td>Digestion</td></tr>
+              <tr><td>7</td><td>Reproduction rules</td><td>Reproduction</td></tr>
+              <tr><td>11</td><td>Terrain</td><td>Terrain sensing</td></tr>
+              <tr><td>13</td><td>Persistent world history, later use</td><td>Persistent internal state</td></tr>
+              <tr><td>17</td><td>Spatial data available in the world</td><td>Raw 3 x 3 neighborhood awareness</td></tr>
+              <tr><td>19</td><td>Shared signal field</td><td>Signal In and Signal Out</td></tr>
+              <tr><td>31</td><td>Structural coupling conditions</td><td>Bind output and one-hop neighbor-state access</td></tr>
+              <tr><td>37</td><td>Resource transformation chemistry</td><td>No direct organism capability yet</td></tr>
+            </tbody></table>
+          </section>
+
+          <section>
+            <h3>3. How a server tick works</h3>
+            <ol>
+              <li>Fire, chemistry, and signal decay update.</li>
+              <li>Every living organism samples direct bonded neighbors' prior Prime-13 values, executes its generated graph, pays maintenance, may move, signal, and consume food. Prime-17 organisms compare generated North, East, South, and West scores before moving.</li>
+              <li>Strong closed facets can redistribute part of a meal to weaker members.</li>
+              <li>Eligible organisms reproduce; each child may receive one arithmetic mutation.</li>
+              <li>Bonds, deaths, markers, and food regrowth update.</li>
+              <li>The server sends a snapshot to this UI.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h3>4. Food and chemistry</h3>
+            <p>A food tile is one discrete edible unit. Phase 13 assigns every food tile a green, blue, or red resource identity. Green return depends most on Prime 5 digestion strength, blue on Prime 3 energy strength, and red on Prime 19 signal strength. The organism standing on it receives energy when its generated Consume output is active; these are metabolic returns, not preset organism roles.</p>
+            <p>Harvesting also reduces local fertility. Fertility recovers slowly in undisturbed tiles and scales food regrowth, so heavy feeding can exhaust a region while other regions recover. Prime 37 continues the material cycle: food can decay into detritus; dead organisms leave detritus; fire turns food into ash; detritus and ash become nutrients; nutrients are drawn down when they support local food regrowth.</p>
+            <p>Population is regulated by a <strong>soft carrying capacity</strong>, not a hard cap. The server calculates a reproductive opportunity from food per organism and usable walkable habitat. Even an energy-rich organism reproduces only when its generated graph permits it <em>and</em> the current ecology offers an opportunity. In ideal conditions that chance is capped at 35%; it falls toward zero as the world becomes crowded or food-poor. The live Ecology note shows both the current opportunity and soft capacity.</p>
+          </section>
+
+          <section>
+            <h3>5. Signals and spatial awareness</h3>
+            <p>Prime 17 supplies raw nearby tile values. It does not mean "avoid fire" or "find food." When combined with Prime 2 movement, its cardinal inputs feed generated North, East, South, and West action outputs. The server selects the strongest legal output; ties preserve the current heading rather than adding a hidden random rule. Organisms without Prime 17 retain the random movement fallback because they have no directional information.</p>
+            <p>Prime 19 lets an organism read and write one anonymous shared field. The field has no built-in vocabulary: a signal can acquire meaning only through generated graph connections and survival consequences.</p>
+            <p>Signals require a meaningful graph output, decay quickly, and have an energy cost. The UI only renders stronger concentrations as purple so low-level signal noise does not cover the world.</p>
+          </section>
+
+          <section>
+            <h3>6. Bonds, compounds, and facets</h3>
+            <p>Prime 31 gives a generated Bind output. Nearby organisms with sufficient bind activity can form bonds after sustained contact. Each bond has a small reserve of structural energy. When a bonded member eats, it allocates a small portion of that meal to its attached bonds; reserves pay bond maintenance and allow structural strength to repair. An unfed active bond loses strength and eventually breaks with an explicit starvation reason. Linked groups move collectively.</p>
+            <p><strong>Structural inheritance:</strong> a bonded Prime-31 parent that reproduces locally buds its child into an adjacent open tile. If the child retains Prime 31, the parent pays a small energy investment into a weak bond seed. It must remain adjacent for several ticks before maturing; a child that loses Prime 31 through arithmetic mutation is born unbonded. This reproduces topology without making any bond immortal.</p>
+            <p>A complete loop of three bonds is an emergent triangular facet. Strong facets have a limited shared metabolism: when one member eats, it keeps most energy, feeds its attached bonds, and then passes a bond-strength-scaled portion to weaker members. This is a world-level structural consequence, not a hard-coded cooperation behavior.</p>
+            <p><strong>Phase 14 distributed state:</strong> Prime-13 organisms expose their prior persistent value across each direct Prime-31 bond. Recipients receive an anonymous mean in their generated Neighbor state sensor. The value does not decay, carry a label, or travel beyond one hop in the same tick. A larger bonded cluster can therefore hold more state than any one member.</p>
+            <p><strong>Collective navigation:</strong> each bonded member produces numeric North, East, South, and West graph scores from its own local metabolic opportunity. The structure averages those values and moves in the strongest legal direction, keeping its heading on ties. Scores are shared; no organism sends another an action or receives a built-in food-seeking command.</p>
+            <p><strong>Facet capital:</strong> when a strong closed facet actually consumes a resource, it can recover a small additional fraction as capital owned by that exact three-member topology. Capital never enters an individual body or an ordinary bond reserve. Once enough has accumulated, a Prime-31 child born beside two members receives two inherited bond seeds, extending the facet. A child that mutates away Prime 31 receives no facet capital. Brighter triangular fills hold more capital.</p>
+            <p><strong>Structural homeostasis:</strong> world-level primary productivity creates new resource units only when fertility permits regrowth. The live productivity line reports this potential energy input. A low-energy bonded member may receive a small transfer from an attached bond reserve, but every transfer reduces the reserve and loses energy in transit; bonds never create energy.</p>
+          </section>
+
+          <section>
+            <h3>7. What the colors and shapes mean</h3>
+            <div class="guide-key">
+              <div><span class="legend-swatch organism"></span><p><strong>Orange circle</strong> Living organism. A brighter body has more energy.</p></div>
+              <div><span class="legend-swatch food green-resource"></span><p><strong>Green asterisk</strong> Green resource, most rewarding to stronger Prime-5 digestion.</p></div>
+              <div><span class="legend-swatch food blue-resource"></span><p><strong>Blue asterisk</strong> Blue resource, most rewarding to stronger Prime-3 energy expression.</p></div>
+              <div><span class="legend-swatch food red-resource"></span><p><strong>Red asterisk</strong> Red resource, most rewarding to stronger Prime-19 signal expression.</p></div>
+              <div><span class="legend-swatch wall"></span><p><strong>White square</strong> Wall or terrain.</p></div>
+              <div><span class="legend-swatch fire"></span><p><strong>Red triangle</strong> Fire.</p></div>
+              <div><span class="guide-swatch signal"></span><p><strong>Purple tile or aura</strong> Strong shared signal field or active Prime-19 output.</p></div>
+              <div><span class="guide-swatch nutrient"></span><p><strong>Amber tint</strong> Nutrients available for local regrowth.</p></div>
+              <div><span class="guide-swatch detritus"></span><p><strong>Brown tint</strong> Detritus from decay or organism remains.</p></div>
+              <div><span class="guide-swatch ash"></span><p><strong>Gray tint</strong> Ash from burned food.</p></div>
+              <div><span class="guide-swatch fertility"></span><p><strong>Brown ground tint</strong> Locally exhausted fertility. It fades as the tile recovers.</p></div>
+              <div><span class="legend-swatch production"></span><p><strong>Gold-green ring</strong> A resource was just created by world-level primary productivity.</p></div>
+              <div><span class="phenotype-sample bond"></span><p><strong>Gold links</strong> Structural bonds. Thicker and brighter means stronger.</p></div>
+              <div><span class="phenotype-sample facet"></span><p><strong>Gold triangle</strong> Closed three-member facet.</p></div>
+              <div><span class="phenotype-sample transfer"></span><p><strong>Mint pulse</strong> Facet energy transfer.</p></div>
+              <div><span class="phenotype-sample persistence"></span><p><strong>Inner ring</strong> Prime 13 persistence.</p></div>
+              <div><span class="phenotype-sample spatial"></span><p><strong>Green marks</strong> Prime 17 spatial awareness.</p></div>
+              <div><span class="phenotype-sample power"></span><p><strong>Gold rings</strong> Strengthened prime powers in the genome.</p></div>
+            </div>
+          </section>
+
+          <section>
+            <h3>8. Controls and experiments</h3>
+            <p><strong>Pause, Resume, Single Step, Reset</strong> control the server simulation. Reset rebuilds the world from the current seed and settings. <strong>Universe Seed</strong> makes a run repeatable. Changing the World Number regenerates world configuration; changing the Founder Genome resets the initial lineage.</p>
+            <p>The Ecology Lab controls food capacity, food growth, mutation chance, signal cost, and fire. Reproduction is also environmentally limited: scarce food and crowded walkable space lower birth opportunity without imposing a hard organism cap. Use fixed seeds and change one variable at a time when comparing experiments. The Bond Lifecycle panel stores only the newest 1,000 events in memory, so this project does not consume disk space for telemetry.</p>
+          </section>
+        </div>
+      </article>
+    </dialog>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

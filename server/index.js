@@ -1,0 +1,190 @@
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize } from "node:path";
+import { DEFAULT_CONFIG } from "./simulation/config.js";
+import { Simulation } from "./simulation/simulation.js";
+
+const simulation = new Simulation(DEFAULT_CONFIG);
+const publicDir = join(process.cwd(), "public");
+
+const MIME_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml"
+};
+
+function sendJson(response, statusCode, payload) {
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  response.end(JSON.stringify(payload));
+}
+
+async function readRequestBody(request) {
+  const chunks = [];
+
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+async function handleApi(request, response, url) {
+  if (request.method === "GET" && url.pathname === "/api/state") {
+    sendJson(response, 200, simulation.getSnapshot());
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/control") {
+    const body = await readRequestBody(request);
+
+    switch (body.action) {
+      case "pause":
+        simulation.pause();
+        break;
+      case "resume":
+        simulation.resume();
+        break;
+      case "toggle":
+        simulation.togglePause();
+        break;
+      case "step":
+        simulation.step();
+        break;
+      case "reset":
+        simulation.reset();
+        break;
+      case "randomize":
+        simulation.randomize();
+        break;
+      default:
+        sendJson(response, 400, { error: "Unknown control action." });
+        return true;
+    }
+
+    sendJson(response, 200, simulation.getSnapshot());
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/settings") {
+    const body = await readRequestBody(request);
+
+    if (body.speed !== undefined) {
+      simulation.setSpeed(body.speed);
+    }
+
+    if (body.foodGrowthRate !== undefined) {
+      simulation.setFoodGrowthRate(body.foodGrowthRate);
+    }
+
+    if (body.foodTargetDensity !== undefined) {
+      simulation.setFoodTargetDensity(body.foodTargetDensity);
+    }
+
+    if (body.mutationRate !== undefined) {
+      simulation.setMutationRate(body.mutationRate);
+    }
+
+    if (body.signalEmissionCost !== undefined) {
+      simulation.setSignalEmissionCost(body.signalEmissionCost);
+    }
+
+    if (body.initialPopulation !== undefined) {
+      simulation.setInitialPopulation(body.initialPopulation);
+    }
+
+    if (body.gridEnabled !== undefined) {
+      simulation.setGridEnabled(body.gridEnabled);
+    }
+
+    if (body.universeSeed !== undefined) {
+      simulation.setSeed(body.universeSeed);
+    }
+
+    if (body.worldNumber !== undefined) {
+      try {
+        simulation.setWorldNumber(body.worldNumber);
+      } catch (error) {
+        sendJson(response, 400, {
+          error: error instanceof Error ? error.message : "Invalid world recipe."
+        });
+        return true;
+      }
+    }
+
+    if (body.founderGenome !== undefined) {
+      try {
+        simulation.setFounderGenome(body.founderGenome);
+      } catch (error) {
+        sendJson(response, 400, {
+          error: error instanceof Error ? error.message : "Invalid founder genome."
+        });
+        return true;
+      }
+    }
+
+    if (body.fireEnabled !== undefined || body.fireIgnitionRate !== undefined || body.fireSpreadChance !== undefined || body.fireDuration !== undefined) {
+      simulation.setFireSettings(body);
+    }
+
+    sendJson(response, 200, simulation.getSnapshot());
+    return true;
+  }
+
+  sendJson(response, 404, { error: "API route not found." });
+  return true;
+}
+
+async function serveStatic(request, response, url) {
+  const requestedPath = url.pathname === "/" ? "/index.html" : url.pathname;
+  const filePath = normalize(join(publicDir, requestedPath));
+
+  if (!filePath.startsWith(publicDir)) {
+    sendJson(response, 403, { error: "Forbidden path." });
+    return;
+  }
+
+  try {
+    const fileContents = await readFile(filePath);
+    const contentType = MIME_TYPES[extname(filePath)] ?? "application/octet-stream";
+    response.writeHead(200, {
+      "Content-Type": contentType,
+      "Cache-Control": "no-store"
+    });
+    response.end(fileContents);
+  } catch (error) {
+    sendJson(response, 404, { error: "File not found." });
+  }
+}
+
+const server = createServer(async (request, response) => {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+
+  try {
+    if (url.pathname.startsWith("/api/")) {
+      await handleApi(request, response, url);
+      return;
+    }
+
+    await serveStatic(request, response, url);
+  } catch (error) {
+    sendJson(response, 500, {
+      error: "Internal server error.",
+      detail: error instanceof Error ? error.message : "Unknown error."
+    });
+  }
+});
+
+server.listen(DEFAULT_CONFIG.server.port, DEFAULT_CONFIG.server.host, () => {
+  console.log(
+    `Project Genesis Phase 3 server running at http://${DEFAULT_CONFIG.server.host}:${DEFAULT_CONFIG.server.port}`
+  );
+});
