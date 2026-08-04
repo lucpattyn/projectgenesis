@@ -1,15 +1,17 @@
-import { factorize } from "./prime-registry.js";
+import { cloneGenome, genomePrimes, normalizeGenome } from "./genome.js";
 
 const STRENGTHENABLE_PRIMES = new Set([3, 5, 7]);
+// Every implemented organism capability is evolutionarily reachable through the same arithmetic graph.
+const MUTATABLE_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 31];
 const MAX_PRIME_POWER = 3;
 
 export class MutationEngine {
   mutate(genome, random) {
-    const before = Number(genome);
-    const factors = factorize(before);
+    const before = normalizeGenome(genome);
+    const factors = genomePrimes(before);
     const choices = [];
 
-    for (const prime of [13, 17, 19, 31]) {
+    for (const prime of MUTATABLE_PRIMES) {
       if (!factors.includes(prime)) {
         choices.push({ type: "gain", prime });
       }
@@ -21,20 +23,20 @@ export class MutationEngine {
       }
       if (
         STRENGTHENABLE_PRIMES.has(prime)
-        && factors.filter((factor) => factor === prime).length < MAX_PRIME_POWER
-        && Number.isSafeInteger(before * prime)
+        && before[prime] < MAX_PRIME_POWER
       ) {
         choices.push({ type: "strengthen", prime });
       }
     }
 
     const mutation = choices[Math.floor(random() * choices.length)];
-    let after = before;
+    const after = cloneGenome(before);
 
     if (mutation.type === "gain" || mutation.type === "strengthen") {
-      after *= mutation.prime;
+      after[mutation.prime] = (after[mutation.prime] ?? 0) + 1;
     } else {
-      after /= mutation.prime;
+      after[mutation.prime] -= 1;
+      if (!after[mutation.prime]) delete after[mutation.prime];
     }
 
     return {
@@ -42,10 +44,10 @@ export class MutationEngine {
       before,
       after,
       description: mutation.type === "gain"
-        ? `x ${mutation.prime}: gained Generator ${mutation.prime}.`
+        ? `+${mutation.prime}: gained Generator ${mutation.prime}.`
         : mutation.type === "lose"
-          ? `/ ${mutation.prime}: lost Generator ${mutation.prime}.`
-          : `x ${mutation.prime}: strengthened Generator ${mutation.prime}.`
+          ? `-${mutation.prime}: lost Generator ${mutation.prime}.`
+          : `+${mutation.prime}: strengthened Generator ${mutation.prime}.`
     };
   }
 }

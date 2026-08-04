@@ -17,6 +17,8 @@ export class World {
     this.ash = [];
     this.nutrients = [];
     this.fertility = [];
+    this.environment = {};
+    this.engineeredFertility = [];
     this.reset();
   }
 
@@ -28,6 +30,7 @@ export class World {
     this.ash = [];
     this.nutrients = [];
     this.fertility = [];
+    this.engineeredFertility = [];
 
     for (let y = 0; y < this.height; y += 1) {
       const row = [];
@@ -53,7 +56,10 @@ export class World {
       this.ash.push(Array(this.width).fill(0));
       this.nutrients.push(Array(this.width).fill(0));
       this.fertility.push(Array(this.width).fill(1));
+      this.engineeredFertility.push(Array(this.width).fill(0));
     }
+    // Environmental state is extensible by layer; fertility is the first canonical layer.
+    this.environment = { fertility: this.fertility, engineeredFertility: this.engineeredFertility };
   }
 
   wrapPosition(x, y) {
@@ -145,7 +151,7 @@ export class World {
     return null;
   }
 
-  growFood(growthRate, attempts, chemistry, ecology = DEFAULT_CONFIG.ecology) {
+  growFood(growthRate, attempts, chemistry, ecology = DEFAULT_CONFIG.ecology, environment = DEFAULT_CONFIG.environment) {
     const targetFoodCount = Math.floor(this.width * this.height * this.foodTargetDensity);
     let foodCount = this.countTilesByType(TILE_TYPES.FOOD);
     const missingFood = Math.max(0, targetFoodCount - foodCount);
@@ -155,24 +161,42 @@ export class World {
     let produced = 0;
     const positions = [];
 
-    for (let attempt = 0; attempt < attempts + recoveryAttempts; attempt += 1) {
+    const standardAttempts = attempts + recoveryAttempts;
+    const nicheCandidates = [];
+    for (let y = 0; y < this.height; y += 1) {
+      for (let x = 0; x < this.width; x += 1) {
+        if (this.engineeredFertility[y][x] >= environment.nicheGrowthThreshold) nicheCandidates.push({ x, y });
+      }
+    }
+    const nicheAttempts = nicheCandidates.length
+      ? Math.min(environment.nicheGrowthAttemptsPerTick, nicheCandidates.length)
+      : 0;
+
+    for (let attempt = 0; attempt < standardAttempts + nicheAttempts; attempt += 1) {
       if (foodCount >= targetFoodCount) {
         break;
       }
 
-      const x = randomInt(this.width, this.random);
-      const y = randomInt(this.height, this.random);
+      const nichePosition = attempt >= standardAttempts
+        ? nicheCandidates[randomInt(nicheCandidates.length, this.random)]
+        : null;
+      const x = nichePosition?.x ?? randomInt(this.width, this.random);
+      const y = nichePosition?.y ?? randomInt(this.height, this.random);
       const nutrientBoost = chemistry.enabled ? this.nutrients[y][x] * chemistry.nutrientGrowthBoost : 0;
-      const fertility = this.fertility[y][x];
+      const fertility = Math.min(1, this.fertility[y][x] + this.engineeredFertility[y][x]);
       const fertilityFactor = ecology.localFertilityEnabled
         ? Math.max(0, (fertility - ecology.minimumFertilityForGrowth) / (1 - ecology.minimumFertilityForGrowth))
         : 1;
-      if (this.random() > Math.min(1, growthRate * (1 + nutrientBoost) * fertilityFactor)) continue;
+      const localGrowthRate = nichePosition
+        ? Math.max(growthRate, environment.nicheGrowthRate)
+        : growthRate;
+      if (this.random() > Math.min(1, localGrowthRate * (1 + nutrientBoost) * fertilityFactor)) continue;
       const tile = this.getTile(x, y);
 
       if (tile.type === TILE_TYPES.EMPTY && !this.isBurning(x, y)) {
         tile.type = TILE_TYPES.FOOD;
         tile.resource = this.chooseResourceType();
+        tile.foodOrigin = null;
         if (chemistry.enabled && this.nutrients[y][x] > 0) {
           this.nutrients[y][x] = Math.max(0, this.nutrients[y][x] - chemistry.nutrientCostPerFood);
         }
@@ -251,17 +275,48 @@ export class World {
     this.detritus[position.y][position.x] = Math.min(1, this.detritus[position.y][position.x] + amount);
   }
 
+  materialAt(x, y) {
+    const position = this.wrapPosition(x, y);
+    return this.detritus[position.y][position.x] + this.ash[position.y][position.x];
+  }
+
+  refineMaterial(x, y, nutrientYield) {
+    const position = this.wrapPosition(x, y);
+    const material = this.materialAt(position.x, position.y);
+    if (material <= 0) return { material: 0, nutrients: 0, foodReleased: 0 };
+
+    const detritusUsed = this.detritus[position.y][position.x];
+    const ashUsed = this.ash[position.y][position.x];
+    this.detritus[position.y][position.x] = 0;
+    this.ash[position.y][position.x] = 0;
+    const nutrients = Math.min(1 - this.nutrients[position.y][position.x], material * nutrientYield);
+    this.nutrients[position.y][position.x] += nutrients;
+    this.fertility[position.y][position.x] = 1;
+
+    const tile = this.getTile(position.x, position.y);
+    let foodReleased = 0;
+    if (tile.type === TILE_TYPES.EMPTY && !this.isBurning(position.x, position.y)) {
+      tile.type = TILE_TYPES.FOOD;
+      tile.resource = this.chooseResourceType();
+      tile.foodOrigin = null;
+      foodReleased = 1;
+    }
+    return { material: detritusUsed + ashUsed, nutrients, foodReleased };
+  }
+
   harvestFood(x, y, ecology = DEFAULT_CONFIG.ecology) {
     const tile = this.getTile(x, y);
     if (tile.type !== TILE_TYPES.FOOD) return null;
 
     const resource = tile.resource ?? RESOURCE_TYPES.GREEN;
+    const foodOrigin = tile.foodOrigin;
     tile.type = TILE_TYPES.EMPTY;
     tile.resource = null;
+    tile.foodOrigin = null;
     if (ecology.localFertilityEnabled) {
       this.fertility[tile.y][tile.x] = Math.max(0, this.fertility[tile.y][tile.x] - ecology.fertilityLossPerHarvest);
     }
-    return resource;
+    return { resource, foodOrigin };
   }
 
   burnFood(x, y, chemistryEnabled) {
@@ -269,14 +324,16 @@ export class World {
     if (tile.type === TILE_TYPES.FOOD) {
       tile.type = TILE_TYPES.EMPTY;
       tile.resource = null;
+      tile.foodOrigin = null;
       if (chemistryEnabled) this.ash[tile.y][tile.x] = Math.min(1, this.ash[tile.y][tile.x] + 1);
     }
   }
 
-  updateChemistry(chemistry, ecology = DEFAULT_CONFIG.ecology) {
+  updateChemistry(chemistry, ecology = DEFAULT_CONFIG.ecology, environment = DEFAULT_CONFIG.environment) {
     if (!chemistry.enabled && !ecology.localFertilityEnabled) return;
     for (let y = 0; y < this.height; y += 1) {
       for (let x = 0; x < this.width; x += 1) {
+        this.engineeredFertility[y][x] = Math.max(0, this.engineeredFertility[y][x] - environment.engineeredFertilityDecay);
         if (ecology.localFertilityEnabled) {
           this.fertility[y][x] = Math.min(1, this.fertility[y][x] + ecology.fertilityRecoveryPerTick);
         }
@@ -334,6 +391,19 @@ export class World {
 
   serializeChemistry() {
     return { detritus: this.detritus, ash: this.ash, nutrients: this.nutrients, fertility: this.fertility };
+  }
+
+  serializeEnvironment() {
+    return this.environment;
+  }
+
+  reinforceEngineeredFertility(x, y, amount = 0.08, maximum = 0.8) {
+    for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > 2) continue;
+      const position = this.wrapPosition(x + dx, y + dy);
+      const falloff = 1 - Math.max(Math.abs(dx), Math.abs(dy)) / 3;
+      this.engineeredFertility[position.y][position.x] = Math.min(maximum, this.engineeredFertility[position.y][position.x] + amount * falloff);
+    }
   }
 
   totalMaterial(material) {

@@ -25,7 +25,7 @@ export const BASE_CONFIG = {
   universe: {
     // A seed makes every Phase 1 experiment reproducible and inspectable.
     initialSeed: 1,
-    worldNumber: 2310
+    worldNumber: 85470
   },
   world: {
     width: 64,
@@ -43,7 +43,7 @@ export const BASE_CONFIG = {
   },
   organism: {
     initialPopulation: 24,
-    founderGenome: 210,
+    founderGenome: { 2: 1, 3: 1, 5: 1, 7: 1, 13: 1, 17: 1, 19: 1, 31: 1 },
     startingEnergy: 0,
     maxAge: 0,
     moveCost: 0,
@@ -84,6 +84,55 @@ export const BASE_CONFIG = {
     nutrientCostPerFood: 0,
     recoveryAttemptsPerMissingFood: 0,
     maxRecoveryAttempts: 0
+  },
+  refinery: {
+    // Red is a low-energy catalyst. Prime-31 facets spend it to recover existing chemical material.
+    enabled: false,
+    minimumMaterial: 0.6,
+    candidateTicks: 12,
+    nutrientYield: 0.65,
+    catalystCapacity: 3,
+    nurseryCreditCapacity: 2
+  },
+  environment: {
+    // Maintained facets create a bounded local primary-production gradient.
+    // It is environmental state, never an organism energy transfer.
+    engineeredFertilityDecay: 0.006,
+    engineeredFertilityReinforcement: 0.08,
+    engineeredFertilityMaximum: 0.8,
+    nicheGrowthAttemptsPerTick: 0,
+    nicheGrowthThreshold: 0.25,
+    nicheGrowthRate: 0
+  },
+  collectiveWork: {
+    enabled: true,
+    gateCount: 4,
+    gateRadius: 3,
+    observeTicks: 8,
+    responseTicks: 8,
+    requiredConsensusTicks: 2,
+    // Consensus is a shared state band, not an exact floating-point recall task.
+    consensusTolerance: 0.45,
+    gateFieldMaximum: 1,
+    gateFieldDecay: 0.035,
+    gateFieldFoodRate: 0.36,
+    // Kept separate from diffuse output so port-coupled ecology can be calibrated without changing its control.
+    gatePortFoodRate: 0.9,
+    gateFieldSenseRadius: 5,
+    // Food is produced at the three visible gate ports while the responsible facet remains intact.
+    // "diffuse" is retained only as the matched experimental control.
+    gateOutputMode: "port-coupled"
+  },
+  courier: {
+    // Mobile Prime-19/13 scouts can carry rare gate-state information to bonded compounds.
+    enabled: false,
+    highEnergyThreshold: 90,
+    maxActiveScouts: 3,
+    observationRadius: 5,
+    reportLifetime: 24,
+    reportInterval: 6,
+    handoffRadius: 2,
+    handoffEnergyCost: 0.15
   },
   ecology: {
     reproductionFoodUnitsPerOrganism: 0,

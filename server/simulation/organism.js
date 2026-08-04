@@ -7,7 +7,8 @@ function resourceYield(resource, strengths) {
   const signal = strengths[19] ?? 0;
 
   if (resource === RESOURCE_TYPES.BLUE) return 0.55 + energy * 0.25 + digestion * 0.2;
-  if (resource === RESOURCE_TYPES.RED) return 0.55 + signal * 0.25 + digestion * 0.2;
+  // Red is catalytic material: modest alone, ecologically valuable when a strong facet can retain it.
+  if (resource === RESOURCE_TYPES.RED) return 0.15 + signal * 0.1 + digestion * 0.1;
   return 0.55 + digestion * 0.45;
 }
 
@@ -17,6 +18,7 @@ export class Organism {
     x,
     y,
     generation = 1,
+    lineageId = id,
     energy = DEFAULT_CONFIG.organism.startingEnergy,
     age = 0,
     genomeProfile,
@@ -35,7 +37,8 @@ export class Organism {
     this.energy = energy;
     this.age = age;
     this.generation = generation;
-    this.genome = genomeProfile.number;
+    this.lineageId = lineageId;
+    this.genome = genomeProfile.genome;
     this.genomeProfile = genomeProfile;
     this.brain = brain;
     this.brainExecution = brainExecution;
@@ -49,6 +52,8 @@ export class Organism {
     this.lastConsumedResource = null;
     this.sharedState = { connectedNeighbors: 0, contributors: [], mean: 0 };
     this.collectiveDecision = null;
+    this.courierReport = null;
+    this.courierMemory = null;
   }
 
   chooseRandomDirection() {
@@ -82,8 +87,9 @@ export class Organism {
     return Number.isFinite(value) ? clamp(value, 0, 1.8) : null;
   }
 
-  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, brainExecutor, coupled, neighborStates = [] }) {
+  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, brainExecutor, coupled, neighborStates = [], structuralFocus = null, collectiveWorkCue = 0, collectiveWorkFields = [], courierTarget = null }) {
     let consumedEnergy = 0;
+    let consumedResource = null;
     if (world.isBurning(this.x, this.y)) {
       this.alive = false;
       this.deathReason = "fire";
@@ -110,9 +116,37 @@ export class Organism {
     ];
     const tileSignal = (x, y) => {
       const tile = world.getTile(x, y);
+      let courierOpportunity = 0;
+      if (courierTarget) {
+        const distance = (fromX, fromY) => {
+          const xDistance = Math.abs(fromX - courierTarget.x);
+          const yDistance = Math.abs(fromY - courierTarget.y);
+          const wrappedX = world.wraps ? Math.min(xDistance, world.width - xDistance) : xDistance;
+          const wrappedY = world.wraps ? Math.min(yDistance, world.height - yDistance) : yDistance;
+          return Math.max(wrappedX, wrappedY);
+        };
+        const currentDistance = distance(this.x, this.y);
+        const nextDistance = distance(x, y);
+        if (nextDistance < currentDistance) courierOpportunity = Math.min(1.25, (currentDistance - nextDistance) * 1.25);
+      }
       // The value is metabolic opportunity for this organism, not a global ordering of resource colors.
-      if (tile.type === TILE_TYPES.FOOD) return resourceYield(tile.resource, this.genomeProfile.powers);
-      return 0;
+      let fieldOpportunity = 0;
+      if (structuralFocus === "gate-field") {
+        fieldOpportunity = Math.max(0, ...collectiveWorkFields.map((field) => {
+          const xDistance = Math.abs(x - field.x);
+          const yDistance = Math.abs(y - field.y);
+          const wrappedX = world.wraps ? Math.min(xDistance, world.width - xDistance) : xDistance;
+          const wrappedY = world.wraps ? Math.min(yDistance, world.height - yDistance) : yDistance;
+          const distance = Math.max(wrappedX, wrappedY);
+          return distance <= field.radius ? field.strength * (1 - distance / (field.radius + 1)) * 1.25 : 0;
+        }));
+      }
+      if (tile.type === TILE_TYPES.FOOD) {
+        if (structuralFocus === "catalyst" && tile.resource === RESOURCE_TYPES.RED) return 1.8;
+        return courierOpportunity + fieldOpportunity + resourceYield(tile.resource, this.genomeProfile.powers);
+      }
+      if (structuralFocus === "material") return courierOpportunity + fieldOpportunity + Math.min(1.8, world.materialAt(x, y) * 1.8);
+      return courierOpportunity + fieldOpportunity;
     };
     this.perception = this.genomeProfile.traits.canSenseNeighborhood
       ? Object.fromEntries(neighborhoodDirections.map(([id, dx, dy]) => [id, tileSignal(this.x + dx, this.y + dy)]))
@@ -121,7 +155,7 @@ export class Organism {
       "p3-energy": this.energy / (config.reproductionThreshold / (this.genomeProfile.powers[7] ?? 1)),
       "p5-food": currentTile.type === TILE_TYPES.FOOD ? 1 : 0,
       "p11-terrain": terrainSignal,
-      "p19-input": world.getSignal(this.x, this.y) / 255 * 8,
+      "p19-input": world.getSignal(this.x, this.y) / 255 * 8 + collectiveWorkCue,
       "p31-neighbor-state": neighborState,
       ...Object.fromEntries(Object.entries(this.perception ?? {}).map(([id, value]) => [`p17-${id}`, value]))
     }, this.brainExecution?.persistentState);
@@ -171,22 +205,26 @@ export class Organism {
     }
 
     if (this.brainExecution.effectors.consume >= 0.5 && currentTile.type === TILE_TYPES.FOOD) {
-      const resource = world.harvestFood(currentTile.x, currentTile.y, ecologyConfig);
-      if (resource) {
-        consumedEnergy = config.foodEnergy * resourceYield(resource, this.genomeProfile.powers);
+      const harvested = world.harvestFood(currentTile.x, currentTile.y, ecologyConfig);
+      if (harvested) {
+        consumedEnergy = config.foodEnergy * resourceYield(harvested.resource, this.genomeProfile.powers);
         this.energy += consumedEnergy;
-        this.lastConsumedResource = resource;
+        consumedResource = harvested.resource;
+        this.lastConsumedResource = harvested.resource;
+        return this.finishAct({ consumedEnergy, consumedResource, consumedFoodOrigin: harvested.foodOrigin }, config);
       }
     }
 
-    this.energy = clamp(this.energy, 0, config.reproductionThreshold * 1.8 * (this.genomeProfile.powers[3] ?? 1));
+    return this.finishAct({ consumedEnergy, consumedResource }, config);
+  }
 
+  finishAct(result, config) {
+    this.energy = clamp(this.energy, 0, config.reproductionThreshold * 1.8 * (this.genomeProfile.powers[3] ?? 1));
     if (this.age >= config.maxAge) {
       this.alive = false;
       this.deathReason = "maximum age";
     }
-
-    return { consumedEnergy };
+    return result;
   }
 
   canReproduce(config) {
@@ -208,6 +246,7 @@ export class Organism {
       x: childPosition.x,
       y: childPosition.y,
       generation: this.generation + 1,
+      lineageId: this.lineageId,
       energy: sharedEnergy,
       genomeProfile: childGenomeProfile,
       brain: brainGenerator.generate(childGenomeProfile),
@@ -227,7 +266,9 @@ export class Organism {
       energy: Number(this.energy.toFixed(2)),
       age: this.age,
       generation: this.generation,
+      lineageId: this.lineageId,
       genome: this.genome,
+      genomeDecimal: this.genomeProfile.number,
       genomeExpression: this.genomeProfile.expression,
       capabilities: this.genomeProfile.capabilities,
       brain: {
@@ -242,6 +283,8 @@ export class Organism {
       signalOutput: Number((this.brainExecution?.effectors.signal ?? 0).toFixed(2)),
       movementDecision: this.movementDecision,
       collectiveDecision: this.collectiveDecision,
+      courierReport: this.courierReport,
+      courierMemory: this.courierMemory,
       color: this.color
     };
   }

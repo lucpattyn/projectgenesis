@@ -10,6 +10,8 @@ const RESOURCE_COLORS = {
   RED: "#ff8b76"
 };
 
+const COURIER_COLORS = { GATE_READY: "#75eaff" };
+
 const CELL_SIZE = 13;
 
 function phenotype(organism) {
@@ -60,7 +62,7 @@ export class Renderer {
 
   render(snapshot) {
     this.lastSnapshot = snapshot;
-    const { world, organisms, controls, markers, bonds = [], facets = [], signal: signalSettings = {}, bonding: bondSettings = {}, facetCapital = {} } = snapshot;
+    const { world, organisms, controls, markers, bonds = [], facets = [], signal: signalSettings = {}, bonding: bondSettings = {}, facetCapital = {}, collectiveWork = {} } = snapshot;
     const { width, height } = this.sizeCanvas(world);
     const cellSize = CELL_SIZE;
     const offsetX = 0;
@@ -131,6 +133,93 @@ export class Renderer {
           this.context.shadowBlur = 0;
         }
       }
+    }
+
+    // Persistent visual history only; it does not feed back into any organism decision or world rule.
+    if (controls.facetTrailEnabled ?? true) {
+      const facetWorkTrail = markers.facetWorkTrail ?? [];
+      for (let y = 0; y < world.height; y += 1) {
+        for (let x = 0; x < world.width; x += 1) {
+          const visits = facetWorkTrail[y]?.[x] ?? 0;
+          if (visits <= 0) continue;
+          const intensity = Math.min(1, Math.log1p(visits) / Math.log(48));
+          this.context.fillStyle = `rgba(255, 176, 52, ${0.09 + intensity * 0.42})`;
+          this.context.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
+          if (intensity >= 0.58) {
+            const inset = cellSize * 0.24;
+            this.context.fillStyle = `rgba(255, 239, 154, ${0.2 + intensity * 0.5})`;
+            this.context.fillRect(
+              offsetX + x * cellSize + inset,
+              offsetY + y * cellSize + inset,
+              cellSize - inset * 2,
+              cellSize - inset * 2
+            );
+          }
+        }
+      }
+    }
+
+    for (const gate of collectiveWork.gates ?? markers.collectiveWork ?? []) {
+      const centerX = offsetX + gate.x * cellSize + cellSize / 2;
+      const centerY = offsetY + gate.y * cellSize + cellSize / 2;
+      const isObserving = gate.phase === "observe";
+      const isResponding = gate.phase === "respond";
+      const color = isResponding ? "#ffcf63" : isObserving ? "#75eaff" : "#7b8b9c";
+      const alpha = gate.phase === "cooldown" ? 0.42 : 0.92;
+      this.context.save();
+      if ((gate.fieldStrength ?? 0) > 0) {
+        this.context.fillStyle = `rgba(114, 255, 152, ${0.06 + gate.fieldStrength * 0.15})`;
+        this.context.strokeStyle = `rgba(152, 255, 183, ${0.16 + gate.fieldStrength * 0.35})`;
+        this.context.lineWidth = Math.max(1, cellSize * 0.08);
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, cellSize * (1.25 + gate.fieldStrength * 0.65), 0, Math.PI * 2);
+        this.context.fill();
+        this.context.stroke();
+      }
+      if ((gate.fieldStrength ?? 0) > 0 && gate.outputMode === "port-coupled") {
+        for (const port of gate.ports ?? []) {
+          const portCenterX = offsetX + port.x * cellSize + cellSize / 2;
+          const portCenterY = offsetY + port.y * cellSize + cellSize / 2;
+          this.context.strokeStyle = "rgba(190, 255, 150, 0.95)";
+          this.context.fillStyle = "rgba(104, 255, 137, 0.14)";
+          this.context.lineWidth = Math.max(1, cellSize * 0.1);
+          this.context.beginPath();
+          this.context.arc(portCenterX, portCenterY, cellSize * 0.36, 0, Math.PI * 2);
+          this.context.fill();
+          this.context.stroke();
+        }
+      }
+      this.context.globalAlpha = alpha;
+      this.context.strokeStyle = color;
+      this.context.fillStyle = "rgba(20, 51, 68, 0.7)";
+      this.context.lineWidth = Math.max(1, cellSize * 0.11);
+      this.context.beginPath();
+      this.context.arc(centerX, centerY, cellSize * 0.58, 0, Math.PI * 2);
+      this.context.fill();
+      this.context.stroke();
+      for (let index = 0; index < 3; index += 1) {
+        const angle = -Math.PI / 2 + index * Math.PI * 2 / 3;
+        const portX = centerX + Math.cos(angle) * cellSize * 0.72;
+        const portY = centerY + Math.sin(angle) * cellSize * 0.72;
+        this.context.fillStyle = ["#7de9ff", "#d48aff", "#ffcf63"][index];
+        this.context.beginPath();
+        this.context.arc(portX, portY, Math.max(1.5, cellSize * 0.13), 0, Math.PI * 2);
+        this.context.fill();
+      }
+      if (isResponding && gate.progress > 0) {
+        this.context.strokeStyle = "#fff2a6";
+        this.context.lineWidth = Math.max(1, cellSize * 0.12);
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, cellSize * 0.9, -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * Math.min(1, gate.progress / (collectiveWork.requiredConsensusTicks ?? 3)));
+        this.context.stroke();
+      }
+      this.context.fillStyle = "#f3fcff";
+      this.context.font = `bold ${Math.max(8, cellSize * 0.58)}px ui-monospace, monospace`;
+      this.context.textAlign = "center";
+      this.context.textBaseline = "middle";
+      this.context.fillText("⌘", centerX, centerY + 1);
+      this.context.restore();
     }
 
     if (controls.gridEnabled) {
@@ -222,6 +311,15 @@ export class Renderer {
         this.context.lineWidth = Math.max(1, cellSize * 0.08);
         this.context.beginPath();
         this.context.arc(centerX, centerY, radius + Math.max(2, cellSize * 0.2), 0, Math.PI * 2);
+        this.context.stroke();
+      }
+
+      const courierType = organism.courierReport?.type ?? organism.courierMemory?.type;
+      if (courierType) {
+        this.context.strokeStyle = COURIER_COLORS[courierType] ?? "#ffffff";
+        this.context.lineWidth = Math.max(1, cellSize * 0.09);
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, radius + Math.max(3, cellSize * 0.3), 0, Math.PI * 2);
         this.context.stroke();
       }
 

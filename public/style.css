@@ -33,6 +33,7 @@ body {
   grid-template-columns: minmax(320px, 380px) 1fr;
   gap: 20px;
   padding: 20px;
+  align-items: start;
 }
 
 .control-panel,
@@ -47,8 +48,8 @@ body {
 .control-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px;
+  gap: 12px;
+  padding: 18px;
 }
 
 .viewport-panel {
@@ -58,12 +59,42 @@ body {
   padding: 20px;
 }
 
+@media (min-width: 981px) {
+  .control-panel {
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .viewport-panel {
+    position: sticky;
+    top: 20px;
+    height: calc(100vh - 40px);
+  }
+}
+
 .viewport-header {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.simulation-control-block {
+  background: linear-gradient(135deg, rgba(115, 240, 168, 0.15), rgba(73, 132, 255, 0.08));
+}
+
+.sidebar-brain h3 {
+  margin-top: 0;
+  font-size: 0.82rem;
+  color: #ffbd73;
+}
+
+.sidebar-brain .live-brain-content svg {
+  height: 125px;
 }
 
 .live-brain-panel {
@@ -364,6 +395,23 @@ h2 {
   border-radius: 18px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.sidebar-brain { border-color: rgba(255, 159, 67, 0.32); }
+.sidebar-brain { background: linear-gradient(135deg, rgba(255, 159, 67, 0.1), rgba(73, 132, 255, 0.06)); }
+
+.organism-key-panel {
+  border-color: rgba(255, 244, 163, 0.24);
+}
+
+.sidebar-phenotype {
+  padding: 8px 0 2px;
+  border: 0;
+}
+
+.sidebar-phenotype .phenotype-item {
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 
 .intro-block p {
@@ -783,6 +831,39 @@ input[type="range"] {
 .telemetry-block {
   background: linear-gradient(135deg, rgba(255, 244, 163, 0.1), rgba(73, 132, 255, 0.06));
 }
+
+.experiment-block {
+  background: linear-gradient(135deg, rgba(115, 240, 168, 0.12), rgba(90, 180, 255, 0.08));
+}
+
+.experiment-block > p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.experiment-status {
+  color: var(--accent-strong);
+  font: 0.78rem ui-monospace, "Cascadia Code", monospace;
+}
+
+.experiment-results {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0;
+}
+
+.experiment-results article {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.experiment-results strong { color: #b7ff87; }
 
 .telemetry-summary {
   color: #ffbd73;

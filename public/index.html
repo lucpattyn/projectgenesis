@@ -21,6 +21,45 @@
           </p>
         </div>
 
+        <section class="panel-block simulation-control-block">
+          <h2>Simulation Control</h2>
+          <div class="button-grid">
+            <button data-action="pause">Pause</button>
+            <button data-action="resume">Resume</button>
+            <button data-action="step">Single Step</button>
+            <button data-action="reset">Reset</button>
+            <button data-action="randomize">Randomize</button>
+            <button id="toggle-grid">Toggle Grid</button>
+          </div>
+        </section>
+
+        <section class="panel-block sidebar-brain">
+          <p class="eyebrow">Live Generated Graph</p>
+          <h2 id="live-brain-title">Selected Organism Brain</h2>
+          <div class="live-brain-content" id="live-brain-content"></div>
+          <details class="brain-help">
+            <summary>How to read this graph</summary>
+            <p>Green nodes sense the world, blue nodes carry internal state, and orange nodes are actions. The graph executes on the server.</p>
+          </details>
+        </section>
+
+        <section class="panel-block organism-key-panel">
+          <p class="eyebrow">World Canvas</p>
+          <h2>Organism Key</h2>
+          <div class="phenotype-legend sidebar-phenotype">
+            <div class="phenotype-item"><span class="phenotype-sample body"></span><span>Orange circle: living organism</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample compound"><i></i><i></i><i></i></span><span>Linked cluster of 3+: Prime 31 compound</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample facet"></span><span>Gold triangle: closed-loop facet</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample transfer"></span><span>Mint pulse: energy sharing inside a facet</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample energy"></span><span>Brighter body: more stored energy</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample persistence"></span><span>Inner ring: Prime 13 persistent state</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample spatial"></span><span>Green marks: Prime 17 spatial awareness</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample signal"></span><span>Purple aura: Prime 19 signal output</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample power"></span><span>Gold rings: strengthened prime powers</span></div>
+            <div class="phenotype-item"><span class="phenotype-sample bond"></span><span>Gold links: structural bonds; brighter is stronger</span></div>
+          </div>
+        </section>
+
         <section class="panel-block intro-block">
           <h2>Generated Physics</h2>
           <p>
@@ -93,7 +132,7 @@
         </section>
 
         <section class="panel-block genome-block">
-          <p class="eyebrow">Phase 8 Spatial Awareness</p>
+          <p class="eyebrow">Spatial Awareness</p>
           <h2>Inspect a Living Organism</h2>
           <p class="genome-intro">Click an orange organism to reveal its arithmetic genome, birth mutation, and generated live brain graph.</p>
           <div id="genome-inspector" class="genome-inspector">
@@ -102,7 +141,7 @@
         </section>
 
         <section class="panel-block generator-block">
-          <p class="eyebrow">Phase 3 Prime Registry</p>
+          <p class="eyebrow">Prime Registry</p>
           <h2>Generated World Recipe</h2>
           <label>
             <span>World Number</span>
@@ -116,18 +155,6 @@
           <p class="generator-status" id="generator-status">Loading generator chain...</p>
           <div class="generator-list" id="generator-list"></div>
           <p class="generator-note" id="generator-note"></p>
-        </section>
-
-        <section class="panel-block">
-          <h2>Simulation Control</h2>
-          <div class="button-grid">
-            <button data-action="pause">Pause</button>
-            <button data-action="resume">Resume</button>
-            <button data-action="step">Single Step</button>
-            <button data-action="reset">Reset</button>
-            <button data-action="randomize">Randomize</button>
-            <button id="toggle-grid">Toggle Grid</button>
-          </div>
         </section>
 
         <section class="panel-block">
@@ -150,10 +177,18 @@
             <span>Universe Seed</span>
             <input id="universe-seed" type="number" min="0" max="4294967295" step="1" />
           </label>
+          <label class="checkbox-label">
+            <input id="courier-enabled" type="checkbox" />
+  <span>Mobile gate couriers</span>
+          </label>
+          <label class="checkbox-label">
+            <input id="facet-trail-enabled" type="checkbox" />
+            <span>Facet-work heatmap</span>
+          </label>
         </section>
 
         <section class="panel-block">
-          <h2>Legend</h2>
+          <h2>World Legend</h2>
           <div class="legend-list">
             <div class="legend-item">
               <span class="legend-swatch food green-resource"></span>
@@ -211,6 +246,17 @@
           <dl class="stats-grid" id="stats-grid"></dl>
         </section>
 
+        <section class="panel-block experiment-block">
+          <p class="eyebrow">Phase 14.5</p>
+          <h2>Evolution Lab</h2>
+          <p>Runs bounded, deterministic server-side comparisons. The canvas remains the live world; this panel reports separate replicated screens.</p>
+          <div class="button-grid">
+            <button id="run-experiments" type="button">Run 3-Seed, 1,000-Tick Screen</button>
+            <button id="cancel-experiments" type="button" class="secondary-button">Cancel Batch</button>
+          </div>
+          <div id="experiment-panel"><p>Loading experiment history...</p></div>
+        </section>
+
         <section class="panel-block telemetry-block">
           <p class="eyebrow">Experiment Telemetry</p>
           <h2>Bond Lifecycle</h2>
@@ -222,37 +268,10 @@
         <div class="viewport-header">
           <div>
             <p class="eyebrow">Live World</p>
-            <h2>Factorized Physics Layer</h2>
+            <h2>Simulation World</h2>
           </div>
           <div class="status-pill" id="status-pill">Connecting...</div>
         </div>
-        <section class="live-brain-panel">
-          <div>
-            <p class="eyebrow">Phase 15 Live Monitor</p>
-            <h3 id="live-brain-title">Generated Brain</h3>
-            <details class="brain-help">
-              <summary>How to read this graph</summary>
-              <p>Green nodes sense the world, blue nodes carry internal state, and orange nodes are actions. Arrows
-                pass a live value from 0 to 1 or more. A purple Persist node, created by Prime 13, reads its prior
-                value for this tick and writes its next value after evaluation. A teal Neighbor state sensor appears when Prime 31 is present; it receives only direct bonded neighbors' prior Prime-13 values. All values are calculated on the server.</p>
-            </details>
-          </div>
-          <div class="live-brain-content" id="live-brain-content"></div>
-          <aside class="phenotype-legend" aria-label="Organism phenotype legend">
-            <p class="eyebrow">Organism Key</p>
-            <div class="phenotype-item"><span class="phenotype-sample body"></span><span>Orange circle: living organism</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample compound"><i></i><i></i><i></i></span><span>Linked cluster of 3+: Prime 31 compound organism</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample facet"></span><span>Gold surface: closed-loop emergent facet</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample transfer"></span><span>Mint pulse: a facet shared meal energy with a weaker member</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample energy"></span><span>Brighter body: more energy</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample persistence"></span><span>Inner ring: Prime 13 persistence</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample spatial"></span><span>Green marks: Prime 17 awareness</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample signal"></span><span>Purple aura: Prime 19 signal output</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample power"></span><span>Gold rings: strengthened prime powers</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample bond"></span><span>Gold links: structural bonds; brighter links hold more reserve energy</span></div>
-            <div class="phenotype-item"><span class="phenotype-sample persistence"></span><span>Teal Neighbor state: direct bonded Prime-13 values enter the graph</span></div>
-          </aside>
-        </section>
         <div id="world-scroll" aria-label="Scrollable simulation world">
           <canvas id="world-canvas"></canvas>
         </div>
@@ -346,9 +365,11 @@
               <div><span class="guide-swatch detritus"></span><p><strong>Brown tint</strong> Detritus from decay or organism remains.</p></div>
               <div><span class="guide-swatch ash"></span><p><strong>Gray tint</strong> Ash from burned food.</p></div>
               <div><span class="guide-swatch fertility"></span><p><strong>Brown ground tint</strong> Locally exhausted fertility. It fades as the tile recovers.</p></div>
+              <div><span class="legend-swatch production"></span><p><strong>Amber heat squares</strong> Facet-work trail. It accumulates each tick a strong closed facet occupies that cell; bright inner squares identify repeatedly used structural sites and corridors since the last reset.</p></div>
               <div><span class="legend-swatch production"></span><p><strong>Gold-green ring</strong> A resource was just created by world-level primary productivity.</p></div>
               <div><span class="phenotype-sample bond"></span><p><strong>Gold links</strong> Structural bonds. Thicker and brighter means stronger.</p></div>
               <div><span class="phenotype-sample facet"></span><p><strong>Gold triangle</strong> Closed three-member facet.</p></div>
+              <div><span class="guide-swatch signal"></span><p><strong>Three-dot cyan/gold gate</strong> A collective-work gate. Cyan means observe: nearby members receive distinct signal fragments. Gold means respond: an intact Prime-13/19/31 facet must hold a shared state long enough to activate its work field. A green aura and three green port rings around the working facet mean that ordinary food is being produced at those occupied ports. Production stops if that exact facet leaves or dissolves, and fades without renewed consensus.</p></div>
               <div><span class="phenotype-sample transfer"></span><p><strong>Mint pulse</strong> Facet energy transfer.</p></div>
               <div><span class="phenotype-sample persistence"></span><p><strong>Inner ring</strong> Prime 13 persistence.</p></div>
               <div><span class="phenotype-sample spatial"></span><p><strong>Green marks</strong> Prime 17 spatial awareness.</p></div>
@@ -360,6 +381,7 @@
             <h3>8. Controls and experiments</h3>
             <p><strong>Pause, Resume, Single Step, Reset</strong> control the server simulation. Reset rebuilds the world from the current seed and settings. <strong>Universe Seed</strong> makes a run repeatable. Changing the World Number regenerates world configuration; changing the Founder Genome resets the initial lineage.</p>
             <p>The Ecology Lab controls food capacity, food growth, mutation chance, signal cost, and fire. Reproduction is also environmentally limited: scarce food and crowded walkable space lower birth opportunity without imposing a hard organism cap. Use fixed seeds and change one variable at a time when comparing experiments. The Bond Lifecycle panel stores only the newest 1,000 events in memory, so this project does not consume disk space for telemetry.</p>
+            <p><strong>Evolution Lab:</strong> runs the preregistered baseline-versus-delayed-refinery comparison over matched deterministic seeds. A refinery conversion needs a strong Prime-31 triangle to remain near detritus or ash for twelve ticks; it releases ordinary food and nutrients, never direct organism energy. The lab stores only aggregate outcomes and periodic samples in a capped server file. These screens are evidence-gathering tools, not a mechanism that changes the live world.</p>
           </section>
         </div>
       </article>

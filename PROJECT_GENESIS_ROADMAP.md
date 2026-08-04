@@ -87,6 +87,18 @@ Resource colors no longer have an accidental numeric rank. A nearby resource con
 
 A strong closed facet receives a bounded ecological payoff only when one of its members actually consumes a resource. Up to 16% additional conversion return, scaled by facet strength, is retained as capital owned by that exact three-member topology. It is neither individual energy nor bond reserve. At the birth threshold, this capital can seed two inherited bonds for a locally born Prime-31 child adjacent to two facet members; a child that loses Prime 31 cannot inherit it. This is not world primary productivity and cannot occur without a real harvest. Telemetry records capital earned, held, spent, and facet births.
 
+## Phase 15.5: Delayed Structural Refinery Experiment
+
+The replicated 1,000-tick cost/return screen showed that lower coupling maintenance and a larger existing facet-capital return did not reliably retain Prime 31. Those changes tune costs or rewards but do not make topology ecologically necessary.
+
+Prime 37 now supplies a targeted next experiment. Red food is low-energy catalytic material, while detritus and ash are recoverable chemical material. A strong three-member Prime-31 facet retains harvested red catalyst and must remain within its normal local structural range of a material-rich patch for twelve consecutive ticks. The completed process spends one catalyst, consumes the detritus/ash, restores local fertility, deposits bounded nutrients, and releases one ordinary local food unit if the patch is empty. It also earns one bounded facet-owned nursery credit.
+
+This is deliberately a world transformation, not a new organism behavior or hidden energy transfer: no body receives direct energy; material must already exist; losing a bond or leaving the patch resets progress; a non-structural mutant may consume the resulting food but cannot initiate another conversion; and a nursery credit can only bypass normal ecological birth opportunity for a locally seeded Prime-31 child.
+
+### Validation protocol
+
+Run matched-seed, replicated comparisons with the same bounded experiment settings used for the Phase 14.5 screen. Compare the unmodified baseline against the refinery-enabled world at 1,000 ticks. Report final Prime-31 frequency, active bonds, facets, refinery conversions, released food, lineage longevity, and extinction counts. Do not change coupling maintenance or facet harvest return during this first refinery comparison.
+
 ## Later: Multi-layer Environment
 
 Replace a mostly exclusive tile type with an inspectable tile dictionary:

@@ -49,7 +49,7 @@ export function hueToColor(hue, saturation = 70, lightness = 58) {
 }
 
 export function createTile(x, y, type) {
-  return { x, y, type };
+  return { x, y, type, foodOrigin: null };
 }
 
 export function formatNumber(value, decimals = 1) {

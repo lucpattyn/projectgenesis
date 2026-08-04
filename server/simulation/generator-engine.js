@@ -76,7 +76,8 @@ export const WORLD_PRIME_REGISTRY = new PrimeRegistry()
       config.organism.perceptionMaintenance = 0.12;
       config.ecology.reproductionFoodUnitsPerOrganism = 2.5;
       config.ecology.reproductionHabitatFraction = 0.12;
-      config.ecology.maximumReproductionOpportunity = 0.35;
+      // Slower global turnover leaves time for delayed structural ecology to matter.
+      config.ecology.maximumReproductionOpportunity = 0.16;
     }
   })
   .register(11, {
@@ -98,6 +99,7 @@ export const WORLD_PRIME_REGISTRY = new PrimeRegistry()
       config.chemistry.nutrientCostPerFood = 0.12;
       config.chemistry.recoveryAttemptsPerMissingFood = 0.08;
       config.chemistry.maxRecoveryAttempts = 120;
+      config.refinery.enabled = true;
       config.ecology.localFertilityEnabled = true;
       config.ecology.fertilityRecoveryPerTick = 0.004;
       config.ecology.fertilityLossPerHarvest = 0.22;

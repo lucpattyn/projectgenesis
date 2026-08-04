@@ -1,4 +1,4 @@
-import { BASE_CONFIG, DEFAULT_CONFIG, DIRECTIONS, TILE_TYPES } from "./config.js";
+import { BASE_CONFIG, DEFAULT_CONFIG, DIRECTIONS, RESOURCE_TYPES, TILE_TYPES } from "./config.js";
 import { DEFAULT_GENERATOR_ENGINE } from "./generator-engine.js";
 import { DEFAULT_GENOME_ENGINE } from "./genome-engine.js";
 import { DEFAULT_BRAIN_GENERATOR } from "./brain-generator.js";
@@ -28,6 +28,7 @@ export class Simulation {
     this.nextOrganismId = 1;
     this.isPaused = false;
     this.gridEnabled = false;
+    this.facetTrailEnabled = true;
     this.speed = this.config.simulation.defaultSpeed;
     this.tickIntervalMs = 1000 / this.config.simulation.tickRate;
     this.timer = null;
@@ -41,6 +42,7 @@ export class Simulation {
     this.birthMarkers = [];
     this.energyTransfers = [];
     this.primaryProductionMarkers = [];
+    this.facetWorkTrail = Array.from({ length: this.world.height }, () => Array(this.world.width).fill(0));
     this.compoundHeadings = new Map();
     this.bonds = new Map();
     this.bondCandidates = new Map();
@@ -49,6 +51,27 @@ export class Simulation {
     this.telemetryEvents = [];
     this.bondsFormed = 0;
     this.bondsBroken = 0;
+    this.bondBreakReasons = {};
+    this.refineryProgress = new Map();
+    this.facetCatalysts = new Map();
+    this.facetNurseryCredits = new Map();
+    this.facetNiches = new Map();
+    this.refineryConversions = 0;
+    this.nicheMaintenanceEnabled = true;
+    this.refineryFoodReleased = 0;
+    this.refineryNutrientsProduced = 0;
+    this.workGates = [];
+    this.collectiveWorkCompletions = 0;
+    this.collectiveWorkFoodReleased = 0;
+    this.collectiveWorkAttendances = 0;
+    this.collectiveWorkFieldHarvests = 0;
+    this.collectiveWorkFieldHarvestsByWorkers = 0;
+    this.collectiveWorkFieldHarvestsByOthers = 0;
+    this.collectiveWorkHarvestLineages = new Map();
+    this.nextCourierReportId = 1;
+    this.courierReportsCreated = 0;
+    this.courierHandoffs = 0;
+    this.nextCourierReportTick = 0;
     this.facetTransfers = 0;
     this.facetEnergyShared = 0;
     this.facetHarvests = 0;
@@ -67,6 +90,7 @@ export class Simulation {
     this.primaryResourceUnits = 0;
     this.primaryPotentialEnergy = 0;
     this.latestPrimaryProduction = 0;
+    this.initializeWorkGates();
     this.seedInitialPopulation(this.config.organism.initialPopulation);
     this.start();
   }
@@ -132,8 +156,11 @@ export class Simulation {
   }
 
   step() {
+    this.decayCourierKnowledge();
     this.world.updateFire({ ...this.config.hazards, chemistryEnabled: this.config.chemistry.enabled });
-    this.world.updateChemistry(this.config.chemistry, this.config.ecology);
+    this.world.updateChemistry(this.config.chemistry, this.config.ecology, this.config.environment);
+    this.updateFacetNiches();
+    this.updateFacetRefineries();
     this.world.decaySignals(this.config.signal.decay);
     const occupiedBefore = new Set(this.organisms.filter((item) => item.alive).map((item) => `${item.x},${item.y}`));
 
@@ -153,6 +180,10 @@ export class Simulation {
         ecologyConfig: this.config.ecology,
         signalConfig: this.config.signal,
         coupled: coupledIds.has(organism.id),
+        structuralFocus: this.getStructuralFocus(organism),
+        collectiveWorkCue: this.getCollectiveWorkCue(organism),
+        collectiveWorkFields: this.getActiveCollectiveWorkFields(),
+        courierTarget: this.getCourierTarget(organism),
         neighborStates: neighborStatesByOrganism.get(organism.id) ?? [],
         brainExecutor: this.brainExecutor
       });
@@ -162,6 +193,13 @@ export class Simulation {
         this.shareFacetEnergy(organism, result.consumedEnergy - structuralAllocation);
         this.applyFacetHarvestAdvantage(organism, result.consumedEnergy);
       }
+      if (result.consumedResource === RESOURCE_TYPES.RED && organism.alive) {
+        this.storeFacetCatalyst(organism);
+      }
+      if (result.consumedFoodOrigin?.type === "gate-field") {
+        this.recordCollectiveWorkHarvest(organism, result.consumedFoodOrigin);
+      }
+      this.createCourierReport(organism);
 
       if (organism.alive) {
         this.supportLowEnergyMember(organism);
@@ -177,16 +215,20 @@ export class Simulation {
     }
 
     this.moveCompounds();
+    this.updateCourierExchange();
     this.handleReproduction();
     this.updateBonds();
     this.removeDeadOrganisms();
     this.updateFacetReserves();
+    this.recordFacetWorkTrail();
+    this.updateCollectiveWork();
     this.updateMarkers();
     const production = this.world.growFood(
       this.config.food.growthRate,
       this.config.food.maxGrowthAttemptsPerTick * this.speed,
       this.config.chemistry,
-      this.config.ecology
+      this.config.ecology,
+      this.config.environment
     );
     this.latestPrimaryProduction = production.count;
     this.primaryResourceUnits += production.count;
@@ -209,14 +251,13 @@ export class Simulation {
       if (!organism.canReproduce(this.config.organism)) {
         continue;
       }
-
-      if (this.random() > reproductionOpportunity) {
-        continue;
-      }
-
       const structuralParent = this.isActivelyBonded(organism.id) && organism.genomeProfile.traits.canCouple;
       const sourceFacet = structuralParent ? this.getStrongestFacetForMember(organism.id) : null;
+      const nurseryCredit = sourceFacet ? (this.facetNurseryCredits.get(sourceFacet.key) ?? 0) : 0;
+      const ordinaryOpportunity = this.random() <= reproductionOpportunity;
+      if (!ordinaryOpportunity && nurseryCredit <= 0) continue;
       const facetBirthSite = sourceFacet ? this.findFacetBirthSite(organism, sourceFacet, occupied) : null;
+      if (!ordinaryOpportunity && !facetBirthSite) continue;
       const localPosition = facetBirthSite?.position ?? (structuralParent ? this.findLocalBirthPosition(organism, occupied) : null);
       const childPosition = localPosition ?? this.world.findRandomOpenPosition(occupied);
       if (!childPosition) {
@@ -258,6 +299,10 @@ export class Simulation {
           this.structuralSeedEnergy += seedEnergy;
           this.recordTelemetry("structural-birth", `Organism #${organism.id} locally budded #${child.id} and invested ${seedEnergy.toFixed(1)} energy into a bond seed.`);
         }
+      }
+      if (facetBirthSite && child.genomeProfile.traits.canCouple && nurseryCredit > 0) {
+        this.facetNurseryCredits.set(sourceFacet.key, nurseryCredit - 1);
+        this.recordTelemetry("refinery-nursery", `Facet ${sourceFacet.key} spent one restored-habitat nursery credit on structural child #${child.id}.`);
       }
     }
 
@@ -398,8 +443,28 @@ export class Simulation {
     this.telemetryEvents = [];
     this.bondsFormed = 0;
     this.bondsBroken = 0;
+    this.bondBreakReasons = {};
+    this.refineryProgress.clear();
+    this.facetCatalysts.clear();
+    this.facetNurseryCredits.clear();
+    this.facetNiches.clear();
+    this.refineryConversions = 0;
+    this.refineryFoodReleased = 0;
+    this.refineryNutrientsProduced = 0;
+    this.collectiveWorkCompletions = 0;
+    this.collectiveWorkFoodReleased = 0;
+    this.collectiveWorkAttendances = 0;
+    this.collectiveWorkFieldHarvests = 0;
+    this.collectiveWorkFieldHarvestsByWorkers = 0;
+    this.collectiveWorkFieldHarvestsByOthers = 0;
+    this.collectiveWorkHarvestLineages.clear();
+    this.nextCourierReportId = 1;
+    this.courierReportsCreated = 0;
+    this.courierHandoffs = 0;
+    this.nextCourierReportTick = 0;
     this.energyTransfers = [];
     this.primaryProductionMarkers = [];
+    this.facetWorkTrail = Array.from({ length: this.world.height }, () => Array(this.world.width).fill(0));
     this.compoundHeadings.clear();
     this.facetTransfers = 0;
     this.facetEnergyShared = 0;
@@ -419,6 +484,7 @@ export class Simulation {
     this.primaryResourceUnits = 0;
     this.primaryPotentialEnergy = 0;
     this.latestPrimaryProduction = 0;
+    this.initializeWorkGates();
     this.snapshotVersion += 1;
     this.seedInitialPopulation(this.config.organism.initialPopulation);
   }
@@ -502,6 +568,397 @@ export class Simulation {
     return statesById;
   }
 
+  getStructuralFocus(organism) {
+    if (!organism.genomeProfile.traits.canCouple) return null;
+    const facet = this.getStrongestFacetForMember(organism.id);
+    if (!facet) return null;
+    if (this.getActiveCollectiveWorkFields().some((field) => this.distanceToGate(organism, field) <= field.radius)) return "gate-field";
+    if (!this.config.refinery.enabled) return null;
+    return (this.facetCatalysts.get(facet.key) ?? 0) > 0 ? "material" : "catalyst";
+  }
+
+  recordFacetWorkTrail() {
+    const organismsById = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const activeFacets = this.getFacets()
+      .filter((facet) => this.getFacetStrength(facet.memberIds) >= this.config.facet.minimumBondStrength);
+    for (const facet of activeFacets) {
+      for (const memberId of facet.memberIds) {
+        const member = organismsById.get(memberId);
+        if (!member) continue;
+        // Observation only: this history is never consulted by simulation physics.
+        this.facetWorkTrail[member.y][member.x] = Math.min(255, this.facetWorkTrail[member.y][member.x] + 1);
+      }
+    }
+  }
+
+  getActiveCollectiveWorkFields() {
+    return this.workGates
+      .filter((gate) => gate.fieldStrength > 0)
+      .map((gate) => ({
+        x: gate.x,
+        y: gate.y,
+        strength: gate.fieldStrength,
+        radius: this.config.collectiveWork.gateFieldSenseRadius,
+        outputMode: this.config.collectiveWork.gateOutputMode
+      }));
+  }
+
+  decayCourierKnowledge() {
+    if (!this.config.courier.enabled) return;
+    for (const organism of this.organisms) {
+      for (const key of ["courierReport", "courierMemory"]) {
+        if (!organism[key]) continue;
+        organism[key].ttl -= 1;
+        if (organism[key].ttl <= 0) organism[key] = null;
+      }
+    }
+    this.limitCourierReports();
+  }
+
+  limitCourierReports() {
+    const activeReports = this.organisms.filter((organism) => organism.alive && organism.courierReport)
+      .sort((first, second) => second.energy - first.energy || first.id - second.id);
+    for (const organism of activeReports.slice(this.config.courier.maxActiveScouts)) organism.courierReport = null;
+  }
+
+  getCourierSpecialists() {
+    return this.organisms
+      .filter((organism) => organism.alive && !this.isActivelyBonded(organism.id)
+        && organism.energy >= this.config.courier.highEnergyThreshold
+        && organism.genomeProfile.traits.canShareInformation && organism.genomeProfile.traits.canPersistState)
+      .sort((first, second) => second.energy - first.energy || first.id - second.id)
+      .slice(0, this.config.courier.maxActiveScouts);
+  }
+
+  findCourierObservation(organism) {
+    const radius = this.config.courier.observationRadius;
+    const actionableGate = this.workGates
+      .filter((gate) => gate.fieldStrength <= 0 && gate.phase === "observe")
+      .sort((first, second) => this.distanceToGate(organism, first) - this.distanceToGate(organism, second))[0];
+    if (!actionableGate || this.distanceToGate(organism, actionableGate) > radius) return null;
+    return {
+      x: actionableGate.x,
+      y: actionableGate.y,
+      type: "GATE_READY",
+      phase: actionableGate.phase,
+      distance: this.distanceToGate(organism, actionableGate)
+    };
+  }
+
+  createCourierReport(organism) {
+    if (!this.config.courier.enabled || !organism.alive || organism.energy < this.config.courier.highEnergyThreshold
+      || !organism.genomeProfile.traits.canShareInformation || !organism.genomeProfile.traits.canPersistState
+      || this.isActivelyBonded(organism.id)) return;
+    if (!this.getCourierSpecialists().some((specialist) => specialist.id === organism.id)) return;
+    if (this.simulationTicks < this.nextCourierReportTick) return;
+    const observation = this.findCourierObservation(organism);
+    if (!observation) return;
+    // A scout carries one observation through its finite lifetime; it does not rewrite its message every tick.
+    if (organism.courierReport) return;
+    organism.courierReport = {
+      id: this.nextCourierReportId++,
+      type: observation.type,
+      x: observation.x,
+      y: observation.y,
+      ttl: this.config.courier.reportLifetime,
+      sourceId: organism.id,
+      sourceLineageId: organism.lineageId
+    };
+    this.courierReportsCreated += 1;
+    this.nextCourierReportTick = this.simulationTicks + this.config.courier.reportInterval;
+    this.limitCourierReports();
+    this.recordTelemetry("courier-observation", `Scout #${organism.id} recorded ${observation.type} at ${observation.x},${observation.y}.`);
+  }
+
+  updateCourierExchange() {
+    if (!this.config.courier.enabled) return;
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const coupledIds = this.getCoupledIds();
+    const couriers = this.organisms.filter((organism) => organism.alive && !coupledIds.has(organism.id) && organism.courierReport);
+    for (const groupIds of this.getBondGroups()) {
+      const members = groupIds.map((id) => byId.get(id)).filter(Boolean);
+      const eligibleFacet = members.length >= 3 && members.some((member) => this.getStrongestFacetForMember(member.id));
+      if (!eligibleFacet) continue;
+      for (const courier of couriers) {
+        if (!members.some((member) => this.areAdjacent(courier, member))) continue;
+        const report = courier.courierReport;
+        const existing = members.find((member) => member.courierMemory)?.courierMemory ?? null;
+        if (!this.shouldAcceptCourierReport(report, existing, members)) continue;
+        let accepted = false;
+        for (const member of members) {
+          if (member.courierMemory?.id === report.id) continue;
+          member.courierMemory = { ...report };
+          accepted = true;
+        }
+        if (accepted) {
+          this.courierHandoffs += 1;
+          courier.energy = Math.max(0, courier.energy - this.config.courier.handoffEnergyCost);
+          this.recordTelemetry("courier-handoff", `Scout #${courier.id} passed ${report.type} location to bonded compound ${groupIds.join(",")}.`);
+        }
+      }
+    }
+  }
+
+  courierReportPriority(report) {
+    return report?.type === "GATE_READY" ? 2 : 1;
+  }
+
+  shouldAcceptCourierReport(candidate, existing, members) {
+    if (!existing) return true;
+    if (existing.id === candidate.id) return false;
+    const candidatePriority = this.courierReportPriority(candidate);
+    const existingPriority = this.courierReportPriority(existing);
+    if (candidatePriority !== existingPriority) return candidatePriority > existingPriority;
+    const distance = (report) => Math.min(...members.map((member) => {
+      const xDistance = Math.abs(member.x - report.x);
+      const yDistance = Math.abs(member.y - report.y);
+      const wrappedX = this.world.wraps ? Math.min(xDistance, this.world.width - xDistance) : xDistance;
+      const wrappedY = this.world.wraps ? Math.min(yDistance, this.world.height - yDistance) : yDistance;
+      return Math.max(wrappedX, wrappedY);
+    }));
+    return existing.ttl <= this.config.courier.reportLifetime / 3 || distance(candidate) + 1 < distance(existing);
+  }
+
+  getCourierTarget(organism) {
+    if (!this.config.courier.enabled || !this.isActivelyBonded(organism.id) || !this.getStrongestFacetForMember(organism.id) || !organism.courierMemory) return null;
+    return organism.courierMemory;
+  }
+
+  initializeWorkGates() {
+    this.workGates = [];
+    if (!this.config.collectiveWork.enabled) return;
+    const occupied = new Set();
+    for (let index = 0; index < this.config.collectiveWork.gateCount; index += 1) {
+      const position = this.world.findRandomOpenPosition(occupied);
+      if (!position) break;
+      occupied.add(`${position.x},${position.y}`);
+      this.workGates.push({
+        id: index + 1,
+        ...position,
+        phase: "observe",
+        phaseTick: 0,
+        progress: 0,
+        targetState: null,
+        attendingFacetKey: null,
+        cooldown: 0,
+        fieldStrength: 0,
+        productionBudget: 0,
+        fieldFacetKey: null,
+        fieldPorts: null,
+        nextPortIndex: 0
+      });
+    }
+  }
+
+  distanceToGate(organism, gate) {
+    const xDistance = Math.abs(organism.x - gate.x);
+    const yDistance = Math.abs(organism.y - gate.y);
+    const wrappedX = this.world.wraps ? Math.min(xDistance, this.world.width - xDistance) : xDistance;
+    const wrappedY = this.world.wraps ? Math.min(yDistance, this.world.height - yDistance) : yDistance;
+    return Math.max(wrappedX, wrappedY);
+  }
+
+  getCollectiveWorkCue(organism) {
+    if (!this.config.collectiveWork.enabled || !organism.genomeProfile.traits.canShareInformation) return 0;
+    const gate = this.workGates
+      .filter((candidate) => candidate.phase === "observe" && candidate.cooldown <= 0)
+      .sort((first, second) => this.distanceToGate(organism, first) - this.distanceToGate(organism, second))[0];
+    if (!gate || this.distanceToGate(organism, gate) > this.config.collectiveWork.gateRadius) return 0;
+    // A gate exposes three local fragments rather than one globally labelled answer.
+    const fragment = Math.abs(organism.x - gate.x + 2 * (organism.y - gate.y) + 9) % 3;
+    return [0.25, 0.8, 1.35][fragment];
+  }
+
+  getFacetAtWorkGate(gate) {
+    const organismsById = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    return this.getFacets()
+      .map((facet) => ({ ...facet, members: facet.memberIds.map((id) => organismsById.get(id)).filter(Boolean) }))
+      .filter((facet) => facet.members.length === 3)
+      .filter((facet) => this.getFacetStrength(facet.memberIds) >= this.config.facet.minimumBondStrength)
+      .filter((facet) => facet.members.every((member) => member.genomeProfile.traits.canCouple
+        && member.genomeProfile.traits.canPersistState && member.genomeProfile.traits.canShareInformation))
+      .filter((facet) => facet.members.every((member) => this.distanceToGate(member, gate) <= this.config.collectiveWork.gateRadius))
+      .sort((first, second) => first.key.localeCompare(second.key))[0] ?? null;
+  }
+
+  releaseCollectiveWorkFood(gate, requested = 1) {
+    if (this.config.collectiveWork.gateOutputMode === "port-coupled") {
+      return this.releasePortCoupledFood(gate, requested);
+    }
+    return this.releaseDiffuseCollectiveWorkFood(gate, requested);
+  }
+
+  getGateWorkPorts(gate) {
+    if (Array.isArray(gate.fieldPorts) && gate.fieldPorts.length) {
+      return gate.fieldPorts.map((port, index) => ({ x: port.x, y: port.y, index }));
+    }
+    const offsets = [{ x: 0, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }];
+    const seen = new Set();
+    return offsets.flatMap((offset, index) => {
+      const position = this.world.wrapPosition(gate.x + offset.x, gate.y + offset.y);
+      const key = `${position.x},${position.y}`;
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{ ...position, index }];
+    });
+  }
+
+  setGateFieldPorts(gate, facet) {
+    // The active ports are the three cells physically occupied by the exact facet doing the work.
+    // They remain readable on canvas as green rings, while the gate itself remains fixed in the world.
+    gate.fieldPorts = facet.members.map((member) => ({ x: member.x, y: member.y }));
+  }
+
+  releasePortCoupledFood(gate, requested = 1) {
+    const ports = this.getGateWorkPorts(gate);
+    let released = 0;
+    for (let attempt = 0; attempt < ports.length && released < requested; attempt += 1) {
+      const portIndex = (gate.nextPortIndex + attempt) % ports.length;
+      const port = ports[portIndex];
+      const tile = this.world.getTile(port.x, port.y);
+      if (tile.type !== TILE_TYPES.EMPTY || this.world.isBurning(port.x, port.y)) continue;
+      tile.type = TILE_TYPES.FOOD;
+      tile.resource = [RESOURCE_TYPES.GREEN, RESOURCE_TYPES.BLUE, RESOURCE_TYPES.RED][port.index % 3];
+      tile.foodOrigin = { type: "gate-field", mode: "port-coupled", gateId: gate.id, facetKey: gate.fieldFacetKey ?? null, portIndex: port.index };
+      gate.nextPortIndex = (portIndex + 1) % ports.length;
+      released += 1;
+    }
+    return released;
+  }
+
+  releaseDiffuseCollectiveWorkFood(gate, requested = 1) {
+    let released = 0;
+    for (let radius = 0; radius <= 2 && released < requested; radius += 1) {
+      for (let dy = -radius; dy <= radius && released < requested; dy += 1) {
+        for (let dx = -radius; dx <= radius && released < requested; dx += 1) {
+          const position = this.world.wrapPosition(gate.x + dx, gate.y + dy);
+          const tile = this.world.getTile(position.x, position.y);
+          if (tile.type !== TILE_TYPES.EMPTY || this.world.isBurning(position.x, position.y)) continue;
+          tile.type = TILE_TYPES.FOOD;
+          tile.resource = [RESOURCE_TYPES.GREEN, RESOURCE_TYPES.BLUE, RESOURCE_TYPES.RED][released % 3];
+          tile.foodOrigin = { type: "gate-field", mode: "diffuse", gateId: gate.id, facetKey: gate.fieldFacetKey ?? null };
+          released += 1;
+        }
+      }
+    }
+    return released;
+  }
+
+  updateCollectiveWorkFields() {
+    for (const gate of this.workGates) {
+      if (gate.fieldStrength <= 0) continue;
+      if (this.config.collectiveWork.gateOutputMode === "port-coupled") {
+        const maintainingFacet = this.getFacetAtWorkGate(gate);
+        if (!maintainingFacet || maintainingFacet.key !== gate.fieldFacetKey) {
+          gate.fieldStrength = 0;
+          gate.productionBudget = 0;
+          gate.fieldPorts = null;
+          this.recordTelemetry("gate-field-ended", `Gate #${gate.id} production stopped because facet ${gate.fieldFacetKey ?? "unknown"} left or dissolved.`);
+          continue;
+        }
+        this.setGateFieldPorts(gate, maintainingFacet);
+      }
+      gate.fieldStrength = Math.max(0, gate.fieldStrength - this.config.collectiveWork.gateFieldDecay);
+      const productionRate = this.config.collectiveWork.gateOutputMode === "port-coupled"
+        ? this.config.collectiveWork.gatePortFoodRate
+        : this.config.collectiveWork.gateFieldFoodRate;
+      gate.productionBudget += gate.fieldStrength * productionRate;
+      while (gate.productionBudget >= 1) {
+        const released = this.releaseCollectiveWorkFood(gate, 1);
+        if (released <= 0) break;
+        gate.productionBudget -= 1;
+        this.collectiveWorkFoodReleased += released;
+      }
+    }
+  }
+
+  recordCollectiveWorkHarvest(organism, origin) {
+    const facet = this.getStrongestFacetForMember(organism.id);
+    const workerHarvest = Boolean(origin.facetKey && facet?.key === origin.facetKey);
+    this.collectiveWorkFieldHarvests += 1;
+    if (workerHarvest) this.collectiveWorkFieldHarvestsByWorkers += 1;
+    else this.collectiveWorkFieldHarvestsByOthers += 1;
+    const lineage = this.collectiveWorkHarvestLineages.get(organism.lineageId) ?? {
+      lineageId: organism.lineageId,
+      harvests: 0,
+      workerHarvests: 0,
+      otherHarvests: 0,
+      latestGeneration: organism.generation,
+      genome: organism.genomeProfile.expression
+    };
+    lineage.harvests += 1;
+    if (workerHarvest) lineage.workerHarvests += 1;
+    else lineage.otherHarvests += 1;
+    lineage.latestGeneration = Math.max(lineage.latestGeneration, organism.generation);
+    this.collectiveWorkHarvestLineages.set(organism.lineageId, lineage);
+    this.recordTelemetry("gate-field-harvest", `Lineage ${organism.lineageId}, organism #${organism.id} (generation ${organism.generation}) harvested gate #${origin.gateId} food as ${workerHarvest ? "responsible facet member" : "local competitor"}.`);
+  }
+
+  updateCollectiveWork() {
+    if (!this.config.collectiveWork.enabled) return;
+    this.updateCollectiveWorkFields();
+    for (const gate of this.workGates) {
+      if (gate.cooldown > 0) {
+        gate.cooldown -= 1;
+        if (gate.cooldown === 0) {
+          gate.phase = "observe";
+          gate.phaseTick = 0;
+        }
+        continue;
+      }
+      gate.phaseTick += 1;
+      const facet = this.getFacetAtWorkGate(gate);
+      if (gate.phase === "observe") {
+        if (gate.phaseTick < this.config.collectiveWork.observeTicks) continue;
+        gate.phase = "respond";
+        gate.phaseTick = 0;
+        gate.progress = 0;
+        gate.attendingFacetKey = facet?.key ?? null;
+        if (facet) this.collectiveWorkAttendances += 1;
+        gate.targetState = facet
+          ? average(facet.members.map((member) => member.getPersistentState() ?? 0))
+          : null;
+        continue;
+      }
+
+      const validFacet = facet && facet.key === gate.attendingFacetKey && gate.targetState !== null;
+      const values = validFacet ? facet.members.map((member) => member.getPersistentState() ?? 0) : [];
+      const spread = values.length ? Math.max(...values) - Math.min(...values) : Infinity;
+      if (validFacet && spread <= this.config.collectiveWork.consensusTolerance) {
+        gate.progress += 1;
+      } else {
+        gate.progress = 0;
+      }
+      if (gate.progress >= this.config.collectiveWork.requiredConsensusTicks) {
+        this.collectiveWorkCompletions += 1;
+        gate.fieldStrength = this.config.collectiveWork.gateFieldMaximum;
+        gate.productionBudget = 0;
+        gate.fieldFacetKey = facet.key;
+        this.setGateFieldPorts(gate, facet);
+        gate.nextPortIndex = 0;
+        // A solved gate immediately materializes one ordinary unit at a visible work port.
+        // This is not energy transfer: the unit remains physical, contestable food. It prevents a
+        // newly successful facet from having to survive an additional tick before its field can begin.
+        if (this.config.collectiveWork.gateOutputMode === "port-coupled") {
+          this.collectiveWorkFoodReleased += this.releasePortCoupledFood(gate, 1);
+        }
+        this.recordTelemetry("consensus-gate", `Facet ${facet.key} completed consensus gate #${gate.id}; its ${this.config.collectiveWork.gateOutputMode === "port-coupled" ? "three work-port" : "local production"} field is active.`);
+        gate.cooldown = 0;
+        gate.phase = "observe";
+        gate.phaseTick = 0;
+        gate.progress = 0;
+        gate.targetState = null;
+        gate.attendingFacetKey = null;
+      } else if (gate.phaseTick >= this.config.collectiveWork.responseTicks) {
+        gate.phase = "observe";
+        gate.phaseTick = 0;
+        gate.progress = 0;
+        gate.targetState = null;
+        gate.attendingFacetKey = null;
+      }
+    }
+  }
+
   getBondGroups() {
     const links = new Map();
     for (const bond of this.bonds.values()) {
@@ -565,6 +1022,99 @@ export class Simulation {
     for (const key of this.facetReserves.keys()) {
       if (!activeKeys.has(key)) this.facetReserves.delete(key);
     }
+    for (const key of this.facetCatalysts.keys()) {
+      if (!activeKeys.has(key)) this.facetCatalysts.delete(key);
+    }
+    for (const key of this.facetNurseryCredits.keys()) {
+      if (!activeKeys.has(key)) this.facetNurseryCredits.delete(key);
+    }
+  }
+
+  storeFacetCatalyst(eater) {
+    if (!this.config.refinery.enabled) return;
+    const facet = this.getStrongestFacetForMember(eater.id);
+    if (!facet) return;
+    const stored = Math.min(this.config.refinery.catalystCapacity, (this.facetCatalysts.get(facet.key) ?? 0) + 1);
+    this.facetCatalysts.set(facet.key, stored);
+    this.recordTelemetry("red-catalyst", `Facet ${facet.key} retained red catalyst ${stored}/${this.config.refinery.catalystCapacity}.`);
+  }
+
+  updateFacetRefineries() {
+    if (!this.config.refinery.enabled) {
+      this.refineryProgress.clear();
+      return;
+    }
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const activeKeys = new Set();
+    for (const facet of this.getFacets()) {
+      if (this.getFacetStrength(facet.memberIds) < this.config.facet.minimumBondStrength) continue;
+      if ((this.facetCatalysts.get(facet.key) ?? 0) < 1) continue;
+      const members = facet.memberIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== 3) continue;
+      const patch = this.findFacetRefineryPatch(members);
+      if (!patch) continue;
+      const key = `${facet.key}@${patch.x},${patch.y}`;
+      activeKeys.add(key);
+      const ticks = (this.refineryProgress.get(key) ?? 0) + 1;
+      if (ticks < this.config.refinery.candidateTicks) {
+        this.refineryProgress.set(key, ticks);
+        continue;
+      }
+      const result = this.world.refineMaterial(patch.x, patch.y, this.config.refinery.nutrientYield);
+      this.refineryProgress.delete(key);
+      if (result.material <= 0) continue;
+      this.refineryConversions += 1;
+      this.facetNiches.set(facet.key, { x: patch.x, y: patch.y });
+      this.facetCatalysts.set(facet.key, Math.max(0, (this.facetCatalysts.get(facet.key) ?? 0) - 1));
+      const credits = Math.min(this.config.refinery.nurseryCreditCapacity, (this.facetNurseryCredits.get(facet.key) ?? 0) + 1);
+      this.facetNurseryCredits.set(facet.key, credits);
+      this.refineryFoodReleased += result.foodReleased;
+      this.refineryNutrientsProduced += result.nutrients;
+      this.recordTelemetry("facet-refinery", `Facet ${facet.key} refined ${result.material.toFixed(2)} stored material at ${patch.x},${patch.y}, releasing ${result.foodReleased} food and ${result.nutrients.toFixed(2)} nutrients.`);
+    }
+    for (const key of this.refineryProgress.keys()) {
+      if (!activeKeys.has(key)) this.refineryProgress.delete(key);
+    }
+  }
+
+  updateFacetNiches() {
+    if (!this.nicheMaintenanceEnabled) return;
+    const active = new Set();
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    for (const facet of this.getFacets()) {
+      const niche = this.facetNiches.get(facet.key);
+      const members = facet.memberIds.map((id) => byId.get(id)).filter(Boolean);
+      if (!niche || members.length !== 3 || this.getFacetStrength(facet.memberIds) < this.config.facet.minimumBondStrength) continue;
+      if (!members.some((member) => this.areAdjacent(member, niche))) continue;
+      this.world.reinforceEngineeredFertility(
+        niche.x,
+        niche.y,
+        this.config.environment.engineeredFertilityReinforcement,
+        this.config.environment.engineeredFertilityMaximum
+      );
+      active.add(facet.key);
+    }
+    for (const key of this.facetNiches.keys()) if (!active.has(key) && !this.getFacets().some((facet) => facet.key === key)) this.facetNiches.delete(key);
+  }
+
+  findFacetRefineryPatch(members) {
+    const positions = new Map();
+    for (const member of members) {
+      for (let deltaX = -2; deltaX <= 2; deltaX += 1) {
+        for (let deltaY = -2; deltaY <= 2; deltaY += 1) {
+          const position = this.world.wrapPosition(member.x + deltaX, member.y + deltaY);
+          positions.set(`${position.x},${position.y}`, position);
+        }
+      }
+    }
+    let strongest = null;
+    for (const position of positions.values()) {
+      if (!members.every((member) => this.areAdjacent(member, position))) continue;
+      const material = this.world.materialAt(position.x, position.y);
+      if (material < this.config.refinery.minimumMaterial || material <= (strongest?.material ?? 0)) continue;
+      strongest = { ...position, material };
+    }
+    return strongest;
   }
 
   getStrongestFacetForMember(organismId) {
@@ -755,13 +1305,42 @@ export class Simulation {
     return wrappedX <= 2 && wrappedY <= 2;
   }
 
+  findAdjacentCandidatePairs(candidates) {
+    const cells = new Map();
+    for (const candidate of candidates) {
+      const key = `${candidate.x},${candidate.y}`;
+      const occupants = cells.get(key) ?? [];
+      occupants.push(candidate);
+      cells.set(key, occupants);
+    }
+
+    const pairs = [];
+    const pairKeys = new Set();
+    for (const candidate of candidates) {
+      // Bonds use a Chebyshev distance of two cells, so only these 25 local cells can qualify.
+      for (let deltaX = -2; deltaX <= 2; deltaX += 1) {
+        for (let deltaY = -2; deltaY <= 2; deltaY += 1) {
+          const position = this.world.wrapPosition(candidate.x + deltaX, candidate.y + deltaY);
+          for (const neighbor of cells.get(`${position.x},${position.y}`) ?? []) {
+            if (neighbor.id <= candidate.id || !this.areAdjacent(candidate, neighbor)) continue;
+            const key = this.bondKey(candidate.id, neighbor.id);
+            if (pairKeys.has(key)) continue;
+            pairKeys.add(key);
+            pairs.push([candidate, neighbor]);
+          }
+        }
+      }
+    }
+    return pairs;
+  }
+
   updateBonds() {
     for (const bond of this.bonds.values()) {
       bond.reserve = Math.max(0, (bond.reserve ?? this.config.bond.initialReserve) - this.config.bond.maintenancePerTick);
     }
     const candidates = this.organisms.filter((organism) => organism.alive && organism.brainExecution?.effectors.bind >= 0.35);
-    const adjacentPairs = [];
-    const adjacentPairKeys = new Set();
+    const adjacentPairs = this.findAdjacentCandidatePairs(candidates);
+    const adjacentPairKeys = new Set(adjacentPairs.map(([first, second]) => this.bondKey(first.id, second.id)));
     const neighbors = new Map(candidates.map((organism) => [organism.id, new Set()]));
     const addAdjacentPair = (first, second) => {
       const key = this.bondKey(first.id, second.id);
@@ -769,13 +1348,9 @@ export class Simulation {
       adjacentPairKeys.add(key);
       adjacentPairs.push([first, second]);
     };
-    for (let index = 0; index < candidates.length; index += 1) {
-      for (let otherIndex = index + 1; otherIndex < candidates.length; otherIndex += 1) {
-        if (!this.areAdjacent(candidates[index], candidates[otherIndex])) continue;
-        addAdjacentPair(candidates[index], candidates[otherIndex]);
-        neighbors.get(candidates[index].id).add(candidates[otherIndex].id);
-        neighbors.get(candidates[otherIndex].id).add(candidates[index].id);
-      }
+    for (const [first, second] of adjacentPairs) {
+      neighbors.get(first.id).add(second.id);
+      neighbors.get(second.id).add(first.id);
     }
     const eligibleIds = new Set();
     const visited = new Set();
@@ -853,28 +1428,31 @@ export class Simulation {
       const second = byId.get(bond.secondId);
       if (!first || !second || !first.alive || !second.alive || !this.areAdjacent(first, second)) {
         this.bonds.delete(key);
-        this.bondsBroken += 1;
         const deadMember = first && !first.alive ? first : second && !second.alive ? second : null;
         const reason = deadMember ? `organism #${deadMember.id} died: ${deadMember.deathReason ?? "unknown cause"}`
           : !first || !second ? "member was removed" : "members separated";
-        this.recordTelemetry("bond-broken", `Bond #${bond.firstId}-#${bond.secondId} broke: ${reason}.`);
+        this.recordBondBreak(bond, reason, deadMember ? `member died: ${deadMember.deathReason ?? "unknown cause"}` : reason);
       } else if (!this.bondCandidates.has(key)) {
         bond.strength = Math.max(0, bond.strength - 0.015);
         if (bond.strength === 0) {
           this.bonds.delete(key);
-          this.bondsBroken += 1;
           const reason = bond.reserve <= 0 ? "bond energy reserve depleted" : "binding was no longer maintained";
-          this.recordTelemetry("bond-broken", `Bond #${bond.firstId}-#${bond.secondId} broke: ${reason}.`);
+          this.recordBondBreak(bond, reason);
         }
       } else if (bond.reserve <= 0) {
         bond.strength = Math.max(0, bond.strength - this.config.bond.starvationStrengthDecay);
         if (bond.strength === 0) {
           this.bonds.delete(key);
-          this.bondsBroken += 1;
-          this.recordTelemetry("bond-broken", `Bond #${bond.firstId}-#${bond.secondId} broke: bond energy reserve depleted.`);
+          this.recordBondBreak(bond, "bond energy reserve depleted");
         }
       }
     }
+  }
+
+  recordBondBreak(bond, reason, category = reason) {
+    this.bondsBroken += 1;
+    this.bondBreakReasons[category] = (this.bondBreakReasons[category] ?? 0) + 1;
+    this.recordTelemetry("bond-broken", `Bond #${bond.firstId}-#${bond.secondId} broke: ${reason}.`);
   }
 
   setInitialPopulation(count) {
@@ -882,13 +1460,26 @@ export class Simulation {
   }
 
   setFounderGenome(genome) {
-    this.genomeEngine.construct(genome);
-    this.config.organism.founderGenome = Number(genome);
+    this.config.organism.founderGenome = this.genomeEngine.construct(genome).genome;
     this.reset();
   }
 
   setGridEnabled(enabled) {
     this.gridEnabled = Boolean(enabled);
+  }
+
+  setFacetTrailEnabled(enabled) {
+    this.facetTrailEnabled = Boolean(enabled);
+  }
+
+  setCourierEnabled(enabled) {
+    this.config.courier.enabled = Boolean(enabled);
+    if (!this.config.courier.enabled) {
+      for (const organism of this.organisms) {
+        organism.courierReport = null;
+        organism.courierMemory = null;
+      }
+    }
   }
 
   setFireSettings({ fireEnabled, fireIgnitionRate, fireSpreadChance, fireDuration }) {
@@ -936,7 +1527,8 @@ export class Simulation {
         resources: this.world.serializeResources(),
         fires: this.world.serializeFires(),
         signals: this.world.serializeSignals(),
-        chemistry: this.world.serializeChemistry()
+        chemistry: this.world.serializeChemistry(),
+        environment: this.world.serializeEnvironment()
       },
       bonds: [...this.bonds.values()],
       facets,
@@ -945,6 +1537,7 @@ export class Simulation {
         paused: this.isPaused,
         speed: this.speed,
         gridEnabled: this.gridEnabled,
+        facetTrailEnabled: this.facetTrailEnabled,
         speedOptions: this.config.simulation.speedOptions
       },
       settings: {
@@ -952,7 +1545,8 @@ export class Simulation {
         initialPopulation: this.config.organism.initialPopulation,
         universeSeed: this.seed,
         worldNumber: this.worldNumber,
-        founderGenome: this.config.organism.founderGenome
+        founderGenome: this.config.organism.founderGenome,
+        founderGenomeDecimal: this.genomeEngine.construct(this.config.organism.founderGenome).number
       },
       ecology: {
         foodTargetDensity: this.config.world.foodTargetDensity,
@@ -963,6 +1557,42 @@ export class Simulation {
         resources: this.world.countResources(),
         reproduction: this.getReproductionOpportunity(),
         principle: "Prime strength gains are bounded, diminishing, and carry maintenance costs."
+      },
+      environment: {
+        ...this.config.environment,
+        engineeredFertilityCells: this.world.engineeredFertility.flat().filter((value) => value >= this.config.environment.nicheGrowthThreshold).length
+      },
+      collectiveWork: {
+        ...this.config.collectiveWork,
+        completions: this.collectiveWorkCompletions,
+        foodReleased: this.collectiveWorkFoodReleased,
+        attendances: this.collectiveWorkAttendances,
+        activeFields: this.workGates.filter((gate) => gate.fieldStrength > 0).length,
+        fieldHarvests: this.collectiveWorkFieldHarvests,
+        fieldHarvestsByWorkers: this.collectiveWorkFieldHarvestsByWorkers,
+        fieldHarvestsByOthers: this.collectiveWorkFieldHarvestsByOthers,
+        harvestingLineages: [...this.collectiveWorkHarvestLineages.values()].sort((first, second) => second.harvests - first.harvests),
+        gates: this.workGates.map((gate) => ({
+          id: gate.id,
+          x: gate.x,
+          y: gate.y,
+          phase: gate.phase,
+          phaseTick: gate.phaseTick,
+          progress: gate.progress,
+          cooldown: gate.cooldown,
+          fieldStrength: Number(gate.fieldStrength.toFixed(2)),
+          activeFacet: gate.attendingFacetKey,
+          fieldFacetKey: gate.fieldFacetKey,
+          outputMode: this.config.collectiveWork.gateOutputMode,
+          ports: this.getGateWorkPorts(gate)
+        }))
+      },
+      courier: {
+        ...this.config.courier,
+        reportsCreated: this.courierReportsCreated,
+        handoffs: this.courierHandoffs,
+        activeScouts: this.organisms.filter((organism) => organism.courierReport).length,
+        informedBondedMembers: this.organisms.filter((organism) => organism.courierMemory && this.isActivelyBonded(organism.id)).length
       },
       hazards: { ...this.config.hazards },
       signal: { ...this.config.signal },
@@ -995,10 +1625,22 @@ export class Simulation {
         ash: Number(this.world.totalMaterial(this.world.ash).toFixed(1)),
         nutrients: Number(this.world.totalMaterial(this.world.nutrients).toFixed(1))
       },
+      refinery: {
+        enabled: this.config.refinery.enabled,
+        candidateTicks: this.config.refinery.candidateTicks,
+        activeProcesses: this.refineryProgress.size,
+        catalystsHeld: [...this.facetCatalysts.values()].reduce((total, value) => total + value, 0),
+        nurseryCredits: [...this.facetNurseryCredits.values()].reduce((total, value) => total + value, 0),
+        conversions: this.refineryConversions,
+        foodReleased: this.refineryFoodReleased,
+        nutrientsProduced: Number(this.refineryNutrientsProduced.toFixed(1)),
+        principle: "Red is a low-energy catalyst. Only a maintained strong Prime-31 facet can spend it to convert existing detritus or ash into local food, nutrients, and one structural nursery opportunity."
+      },
       telemetry: {
         storage: "In memory only; newest 1,000 events retained (0 bytes written to disk).",
         bondsFormed: this.bondsFormed,
         bondsBroken: this.bondsBroken,
+        bondBreakReasons: { ...this.bondBreakReasons },
         facetTransfers: this.facetTransfers,
         facetEnergyShared: Number(this.facetEnergyShared.toFixed(1)),
         facetHarvests: this.facetHarvests,
@@ -1014,6 +1656,18 @@ export class Simulation {
         structuralSeedEnergy: Number(this.structuralSeedEnergy.toFixed(1)),
         collectiveMoves: this.collectiveMoves,
         collectiveResourceDirectedMoves: this.collectiveResourceDirectedMoves,
+        refineryConversions: this.refineryConversions,
+        refineryFoodReleased: this.refineryFoodReleased,
+        refineryNutrientsProduced: Number(this.refineryNutrientsProduced.toFixed(1)),
+        collectiveWorkCompletions: this.collectiveWorkCompletions,
+        collectiveWorkFoodReleased: this.collectiveWorkFoodReleased,
+        collectiveWorkAttendances: this.collectiveWorkAttendances,
+        collectiveWorkActiveFields: this.workGates.filter((gate) => gate.fieldStrength > 0).length,
+        collectiveWorkFieldHarvests: this.collectiveWorkFieldHarvests,
+        collectiveWorkFieldHarvestsByWorkers: this.collectiveWorkFieldHarvestsByWorkers,
+        collectiveWorkFieldHarvestsByOthers: this.collectiveWorkFieldHarvestsByOthers,
+        courierReportsCreated: this.courierReportsCreated,
+        courierHandoffs: this.courierHandoffs,
         recentEvents: this.telemetryEvents.slice(-12).reverse()
       },
       genesis: {
@@ -1027,7 +1681,9 @@ export class Simulation {
         births: this.birthMarkers,
         deaths: this.deathMarkers,
         energyTransfers: this.energyTransfers,
-        primaryProduction: this.primaryProductionMarkers
+        primaryProduction: this.primaryProductionMarkers,
+        facetWorkTrail: this.facetWorkTrail,
+        collectiveWork: this.workGates.map((gate) => ({ ...gate }))
       },
       statistics: this.getStatistics()
     };

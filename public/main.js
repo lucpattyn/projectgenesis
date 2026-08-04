@@ -39,6 +39,11 @@ const signalCostValue = document.getElementById("signal-cost-value");
 const guideButton = document.getElementById("guide-button");
 const guideDialog = document.getElementById("guide-dialog");
 const guideCloseButton = document.getElementById("guide-close");
+const experimentPanel = document.getElementById("experiment-panel");
+const runExperimentsButton = document.getElementById("run-experiments");
+const cancelExperimentsButton = document.getElementById("cancel-experiments");
+const courierEnabledInput = document.getElementById("courier-enabled");
+const facetTrailEnabledInput = document.getElementById("facet-trail-enabled");
 
 const renderer = new Renderer(canvas);
 let currentSnapshot = null;
@@ -84,7 +89,7 @@ function renderStats(statistics) {
   }
 }
 
-function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}) {
+function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}, refinery = {}, collectiveWork = {}, courier = {}) {
   telemetryPanel.innerHTML = `
     <p class="telemetry-summary">Formed ${telemetry.bondsFormed} | Broken ${telemetry.bondsBroken}</p>
     <p class="telemetry-summary">Facet transfers ${telemetry.facetTransfers ?? 0} | Energy shared ${telemetry.facetEnergyShared ?? 0}</p>
@@ -94,6 +99,10 @@ function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}) {
     <p class="telemetry-summary">Reserve support ${telemetry.bondSupportTransfers ?? 0} transfers | Energy returned ${telemetry.bondSupportEnergyReleased ?? 0}</p>
     <p class="telemetry-summary">Structural births ${telemetry.structuralBirths ?? 0} | Facet births ${telemetry.facetBirths ?? 0} | Capital spent ${telemetry.facetReserveSpent ?? 0}</p>
     <p class="telemetry-summary">Collective moves ${telemetry.collectiveMoves ?? 0} | Resource-scored moves ${telemetry.collectiveResourceDirectedMoves ?? 0}</p>
+    <p class="telemetry-summary">Facet refinery ${telemetry.refineryConversions ?? 0} conversions | ${telemetry.refineryFoodReleased ?? 0} food released | ${telemetry.refineryNutrientsProduced ?? 0} nutrients recovered</p>
+    <p class="telemetry-summary">Consensus gates ${telemetry.collectiveWorkCompletions ?? 0} completed | ${telemetry.collectiveWorkFoodReleased ?? 0} field food released | ${collectiveWork.activeFields ?? 0} active fields</p>
+    <p class="telemetry-summary">Field harvests ${collectiveWork.fieldHarvests ?? 0} | Responsible facet ${collectiveWork.fieldHarvestsByWorkers ?? 0} | Local competitors ${collectiveWork.fieldHarvestsByOthers ?? 0}</p>
+    <p class="telemetry-summary">Courier reports ${courier.reportsCreated ?? 0} | Handoffs ${courier.handoffs ?? 0} | Active scouts ${courier.activeScouts ?? 0}</p>
     <p class="telemetry-summary">State bearers ${distributedState.stateBearers ?? 0} | One-hop state inputs ${distributedState.activeStateInputs ?? 0}</p>
     <p class="telemetry-storage">${telemetry.storage}</p>
     <div class="telemetry-events">
@@ -104,6 +113,29 @@ function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}) {
         : "<p>No bond events recorded in this experiment yet.</p>"}
     </div>
   `;
+}
+
+function renderExperiments(experiments) {
+  const status = experiments.status ?? { state: "idle" };
+  const latest = experiments.latest;
+  runExperimentsButton.disabled = status.state === "running" || status.state === "cancelling";
+  cancelExperimentsButton.disabled = status.state !== "running";
+  const progress = status.state === "running"
+    ? `<p class="experiment-status">Running ${status.scenario}: ${status.completedRuns}/${status.totalRuns} completed, tick ${status.tick}/${status.ticks}</p>`
+    : `<p class="experiment-status">${latest ? "Latest screen complete." : "No completed screens yet."}</p>`;
+  const summary = latest?.summary?.length
+    ? `<div class="experiment-results">${latest.summary.map((result) => `
+      <article>
+        <strong>${result.label}</strong>
+        ${result.meanPopulation !== undefined ? `<span>Population ${result.meanPopulation} | Energy ${result.meanAverageEnergy} | Generation ${result.meanHighestGeneration}</span>` : ""}
+        <span>Prime 31 ${Math.round(result.meanP31Frequency * 100)}% | Bonds ${result.meanBonds}</span>
+        <span>Facet births ${result.meanFacetBirths} | Extinctions ${result.p31Extinctions}/${result.runs}</span>
+        ${result.meanGateCompletions !== undefined ? `<span>Gate attendance ${result.meanGateAttendances} | Completions ${result.meanGateCompletions} | Gate food ${result.meanGateFoodReleased}</span><span>Field harvests ${result.meanGateFieldHarvests} | Workers ${result.meanGateFieldWorkerHarvests} | Competitors ${result.meanGateFieldOtherHarvests}</span>` : ""}
+        ${result.meanRefineryConversions !== undefined ? `<span>Refinery conversions ${result.meanRefineryConversions} | Food released ${result.meanRefineryFoodReleased}</span>` : ""}
+      </article>`).join("")}</div>`
+    : "<p class=\"telemetry-storage\">The current batch compares the unmodified ecology with the delayed topology-only refinery.</p>";
+  const storage = experiments.storage ?? {};
+  experimentPanel.innerHTML = `${progress}${summary}<p class="telemetry-storage">${storage.policy ?? "Aggregate storage pending."} Records: ${storage.records ?? 0}; limit ${Math.round((storage.limitBytes ?? 0) / 1024 / 1024)} MB.</p>`;
 }
 
 function renderGenerators(generators) {
@@ -267,7 +299,7 @@ function syncControls(snapshot) {
   initialPopulationValue.textContent = snapshot.settings.initialPopulation;
   universeSeedInput.value = String(snapshot.settings.universeSeed);
   worldNumberInput.value = String(snapshot.settings.worldNumber);
-  founderGenomeInput.value = String(snapshot.settings.founderGenome);
+  founderGenomeInput.value = JSON.stringify(snapshot.settings.founderGenome);
   statusPill.textContent = snapshot.controls.paused ? "Paused" : "Running";
   const resources = snapshot.ecology.resources ?? {};
   const resourceSummary = `Resources G:${resources.GREEN ?? 0} B:${resources.BLUE ?? 0} R:${resources.RED ?? 0}`;
@@ -278,7 +310,7 @@ function syncControls(snapshot) {
   const productivity = snapshot.primaryProduction ?? {};
   productivityNote.textContent = `Primary productivity: ${productivity.latestResourceUnits ?? 0} resource units this tick | ${productivity.totalResourceUnits ?? 0} since reset | ${productivity.totalPotentialEnergy ?? 0} potential energy created by fertility-driven regrowth.`;
   chemistryNote.textContent = snapshot.chemistry.enabled
-    ? `Prime 37 chemistry: detritus ${snapshot.chemistry.detritus} | ash ${snapshot.chemistry.ash} | nutrients ${snapshot.chemistry.nutrients}. Nutrients and recovering fertility support local food regrowth.`
+    ? `Prime 37 chemistry: detritus ${snapshot.chemistry.detritus} | ash ${snapshot.chemistry.ash} | nutrients ${snapshot.chemistry.nutrients}. ${snapshot.refinery?.enabled ? `Red is a low-energy facet catalyst. Catalyst-poor facets seek red; catalyst-loaded facets seek detritus/ash. They hold ${snapshot.refinery.catalystsHeld} catalysts and ${snapshot.refinery.nurseryCredits} nursery credits; ${snapshot.refinery.conversions} restorations released ${snapshot.refinery.foodReleased} food.` : "Nutrients and recovering fertility support local food regrowth."}`
     : "Prime 37 chemistry is inactive in this world recipe.";
   fireEnabledInput.checked = snapshot.hazards.fireEnabled;
   fireIgnitionInput.value = String(snapshot.hazards.fireIgnitionRate);
@@ -287,13 +319,16 @@ function syncControls(snapshot) {
   fireSpreadValue.textContent = Number(snapshot.hazards.fireSpreadChance).toFixed(2);
   fireDurationInput.value = String(snapshot.hazards.fireDuration);
   fireDurationValue.textContent = snapshot.hazards.fireDuration;
+  courierEnabledInput.checked = snapshot.courier?.enabled ?? false;
+  facetTrailEnabledInput.checked = snapshot.controls.facetTrailEnabled ?? true;
+  chemistryNote.textContent += ` Couriers ${snapshot.courier?.enabled ? "on" : "off"}: ${snapshot.courier?.activeScouts ?? 0} scouts, ${snapshot.courier?.handoffs ?? 0} handoffs.`;
 }
 
 function renderSnapshot(snapshot) {
   currentSnapshot = snapshot;
   syncControls(snapshot);
   renderStats(snapshot.statistics);
-  renderTelemetry(snapshot.telemetry, snapshot.distributedState, snapshot.facetCapital);
+  renderTelemetry(snapshot.telemetry, snapshot.distributedState, snapshot.facetCapital, snapshot.refinery, snapshot.collectiveWork, snapshot.courier);
   renderGenerators(snapshot.generators);
   renderGenomeInspector(snapshot);
   renderLiveBrain(snapshot);
@@ -306,6 +341,14 @@ async function loadSnapshot() {
     renderSnapshot(snapshot);
   } catch (error) {
     statusPill.textContent = "Connection Error";
+  }
+}
+
+async function loadExperiments() {
+  try {
+    renderExperiments(await fetchJson("/api/experiments"));
+  } catch (error) {
+    experimentPanel.innerHTML = "<p>Experiment service unavailable.</p>";
   }
 }
 
@@ -333,6 +376,16 @@ guideButton.addEventListener("click", () => guideDialog.showModal());
 guideCloseButton.addEventListener("click", () => guideDialog.close());
 guideDialog.addEventListener("click", (event) => {
   if (event.target === guideDialog) guideDialog.close();
+});
+
+runExperimentsButton.addEventListener("click", async () => {
+  await fetchJson("/api/experiments", { method: "POST", body: JSON.stringify({ action: "start", replicates: 3, ticks: 1000 }) });
+  loadExperiments();
+});
+
+cancelExperimentsButton.addEventListener("click", async () => {
+  await fetchJson("/api/experiments", { method: "POST", body: JSON.stringify({ action: "cancel" }) });
+  loadExperiments();
 });
 
 speedSelect.addEventListener("change", () => {
@@ -385,8 +438,10 @@ worldNumberInput.addEventListener("change", () => {
 });
 
 founderGenomeInput.addEventListener("change", () => {
-  postJson("/api/settings", { founderGenome: Number(founderGenomeInput.value) }).catch(() => {
-    founderGenomeInput.value = String(currentSnapshot.settings.founderGenome);
+  const value = founderGenomeInput.value.trim();
+  const founderGenome = value.startsWith("{") ? JSON.parse(value) : Number(value);
+  postJson("/api/settings", { founderGenome }).catch(() => {
+    founderGenomeInput.value = JSON.stringify(currentSnapshot.settings.founderGenome);
   });
 });
 
@@ -394,6 +449,8 @@ fireEnabledInput.addEventListener("change", () => postJson("/api/settings", { fi
 fireIgnitionInput.addEventListener("change", () => postJson("/api/settings", { fireIgnitionRate: Number(fireIgnitionInput.value) }));
 fireSpreadInput.addEventListener("change", () => postJson("/api/settings", { fireSpreadChance: Number(fireSpreadInput.value) }));
 fireDurationInput.addEventListener("change", () => postJson("/api/settings", { fireDuration: Number(fireDurationInput.value) }));
+courierEnabledInput.addEventListener("change", () => postJson("/api/settings", { courierEnabled: courierEnabledInput.checked }));
+facetTrailEnabledInput.addEventListener("change", () => postJson("/api/settings", { facetTrailEnabled: facetTrailEnabledInput.checked }));
 fireIgnitionInput.addEventListener("input", () => { fireIgnitionValue.textContent = Number(fireIgnitionInput.value).toFixed(3); });
 fireSpreadInput.addEventListener("input", () => { fireSpreadValue.textContent = Number(fireSpreadInput.value).toFixed(2); });
 fireDurationInput.addEventListener("input", () => { fireDurationValue.textContent = fireDurationInput.value; });
@@ -407,4 +464,6 @@ canvas.addEventListener("click", (event) => {
 });
 
 loadSnapshot();
+loadExperiments();
 setInterval(loadSnapshot, 200);
+setInterval(loadExperiments, 1000);

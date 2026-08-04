@@ -12,6 +12,37 @@ Phase 15 begins distributed processing with collective navigation. Bonded Prime-
 
 Strong closed facets also receive bounded collective harvest capital only when a member consumes a resource. This capital belongs to the exact three-member topology, not to any body or ordinary bond reserve. When it reaches the birth threshold, it can seed two inherited bonds for a locally born Prime-31 child. A child that mutates away Prime 31 cannot inherit this capital. The UI reports held and spent capital separately from world primary productivity.
 
+Phase 15.5 gives structure an ecological role. Red food is low-energy catalytic material: a strong closed Prime-31 facet can retain it, then spend one catalyst after twelve maintained ticks near detritus or ash to restore that local patch. Refining consumes existing material, restores fertility, and releases ordinary local food and nutrients; it never deposits energy directly into an organism or creates primary productivity. Every completed restoration also creates one bounded facet-owned nursery credit, which can provide a local structural birth opportunity only when the child retains Prime 31.
+
+Strong facets use their existing Prime-17 directional field contextually: catalyst-poor facets value nearby red food, while catalyst-loaded facets value nearby detritus and ash. Global reproduction opportunity is deliberately bounded at 16%, leaving time for this delayed ecological cycle to matter.
+
+Environmental state is represented as named world layers. Fertility is the first canonical layer and remains compatible with the existing chemistry view; future layers such as moisture, shelter, temperature, or signal conductivity can be added without changing tile identity.
+
+## Collective work: consensus gates
+
+Consensus gates are the first explicit problem-solving task in the world. Each visible three-port gate alternates between an **observe** phase and a **respond** phase. During observation it gives nearby Prime-19 organisms different local signal fragments. A complete, strong facet whose members also carry Prime 13, 19, and 31 must retain and exchange those fragments, then hold one converged state band through the response phase. The task measures agreement, not impossible exact recall of a continuously changing floating-point value. After the required consecutive consensus ticks, the gate releases a bounded set of ordinary food units nearby.
+
+The gate never transfers energy into organisms. Success activates a visible, local production field that gradually creates ordinary food at the three work ports physically occupied by the responsible facet. Its green aura and port rings disappear if that facet leaves or dissolves, and it fades unless consensus is renewed; a nearby working facet’s existing Prime-17 field scores the active region as valuable and can harvest the resulting food. An individual cannot complete the task because it cannot form a three-member closed facet or receive direct neighbor state. This is deliberately an unfamiliar computational ecology rather than an imitation of a known food chain: facets are being tested as small distributed state machines with a survival-relevant job.
+
+The Evolution Lab’s gate screen compares matched **gate-enabled** and **gate-disabled** worlds. It fixes food, mutation, reproduction, founder mix, and seed, disables the refinery in both arms, and records gate attendance, completions, gate-derived food, Prime-31 frequency, bonds, facets, lineage age, and extinctions. It is a selection test, not a reward guarantee.
+
+Mobile couriers are disabled by default and can be enabled from Settings for a controlled experiment. A loose high-energy organism with Prime 19 and Prime 13 can carry one finite report only about a nearby actionable gate: its location and ready/observe phase. Food remains locally sensed by Prime 17 and is deliberately not courier-reported. When a scout comes near a bonded facet compound, the compound briefly retains that gate report and its Prime-17 directional scores gain an added gradient toward the reported location. Cyan rings identify active gate reports. The Evolution Lab includes matched gates-with-couriers and gates-without-couriers controls.
+
+The canvas retains an observational **facet-work trail**. Each tick that a strong closed facet occupies a cell adds a faint persistent gold heat value to that cell. It resets with the world and is never read by organisms or used by any ecological rule. Long runs therefore reveal where structural work concentrated, migrated, or disappeared without altering the simulation being measured.
+
+The first 1,000-tick matched screen established that gates are survival-critical in the task-rich resource-limited setting: all gate-disabled replicates went extinct, while gate-enabled replicates persisted and reached later generations. Gate production is now port-coupled to the three occupied cells of the exact working facet and records provenance on every food unit. A matched 500-tick production sweep found a viable high-output port regime: 95 mean final facets and 56.7 bonds, versus 5 facets and 13.3 bonds for the matched diffuse-field control. The default port rate is therefore 0.9 ordinary food units per field-strength tick. Output remains physical and contestable; the remaining research question is its longer-horizon stability, not whether it can support a rich structural phase. Full method and results are in `EVOLUTIONARY_VALIDATION_HANDOFF.md`.
+
+## Niche-dependence experiment
+
+The current ecology experiment deliberately avoids terrain. All four conditions use the same open world, founder population, chemistry, mutation rate, and Prime-31 starting frequency. They differ only in background food supply and whether a refined patch is actively maintained.
+
+- **Abundant:** ordinary food is plentiful, so a facet niche should provide little selective advantage.
+- **Intermediate:** ordinary food is reduced; a maintained niche may improve local reliability without being essential.
+- **Scarce, maintained:** background food is scarce. A facet that has completed a refinery restoration holds a bounded engineered-fertility gradient. That gradient decays without the facet, and while it is maintained it receives a limited number of preferential local food-growth attempts. It creates food as normal primary production; it never transfers energy directly to organisms.
+- **Scarce, maintenance disabled:** the matched negative control. Refinery restoration can still occur, but its gradient is allowed to decay and receives no continuing reinforcement.
+
+This design makes the causal claim testable: if maintained facets are ecologically necessary, scarce-maintained runs should retain more structural lineages, active bonds, and refinery/niche activity than the matched maintenance-disabled control. It does **not** assume the result; the lab records extinctions and failed invasions too.
+
 ## Phase 7 goals
 
 - Establish a clean simulation engine with clear module boundaries.
@@ -98,6 +129,7 @@ This keeps the architecture aligned with future deployment, persistence, and mul
 - Prime powers: repeated `3` expands energy capacity, repeated `5` improves food energy with diminishing returns, and repeated `7` lowers the reproduction energy threshold with diminishing returns; Phase 7 caps powers at three
 - Persistence: Prime `13` replaces direct energy-to-action links with a one-tick persistent state node, evaluated deterministically as read-then-write
 - Ecology: food regrows up to an 18% world carrying capacity; amplified genes and persistence consume maintenance energy each tick
+- Facet refinery: strong Prime-31 triangles can recover existing detritus or ash after sustained local contact; conversions, released food, and recovered nutrients are live telemetry
 
 ## Extension roadmap
 

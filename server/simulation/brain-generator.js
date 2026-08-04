@@ -49,6 +49,11 @@ export class BrainGenerator {
       if (factors.has(7)) {
         edges.push(edge("p13-persistence", "p7-reproduce"));
       }
+      // Prime 19 can write an environmental task fragment into persistent state.
+      // Prime 31 then makes that prior-tick value available to bonded neighbors.
+      if (factors.has(19)) {
+        edges.push(edge("p19-input", "p13-persistence"));
+      }
     }
 
     if (factors.has(11)) {
@@ -94,6 +99,9 @@ export class BrainGenerator {
       // Signal output is driven by information, not the organism's baseline energy level.
       if (factors.has(17)) {
         edges.push(edge("p17-field", "p19-output"));
+      }
+      if (factors.has(13)) {
+        edges.push(edge("p13-persistence", "p19-output"));
       }
     }
 

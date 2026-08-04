@@ -3,9 +3,11 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { DEFAULT_CONFIG } from "./simulation/config.js";
 import { Simulation } from "./simulation/simulation.js";
+import { ExperimentRunner } from "./experiments/experiment-runner.js";
 
 const simulation = new Simulation(DEFAULT_CONFIG);
 const publicDir = join(process.cwd(), "public");
+const experimentRunner = new ExperimentRunner(join(process.cwd(), "data", "experiment-history.json"));
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -40,6 +42,24 @@ async function readRequestBody(request) {
 async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/state") {
     sendJson(response, 200, simulation.getSnapshot());
+    return true;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/experiments") {
+    sendJson(response, 200, experimentRunner.snapshot());
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/experiments") {
+    const body = await readRequestBody(request);
+    try {
+      const snapshot = body.action === "cancel"
+        ? experimentRunner.cancel()
+        : await experimentRunner.start(body);
+      sendJson(response, 200, snapshot);
+    } catch (error) {
+      sendJson(response, 400, { error: error instanceof Error ? error.message : "Unable to run experiment." });
+    }
     return true;
   }
 
@@ -103,6 +123,14 @@ async function handleApi(request, response, url) {
 
     if (body.gridEnabled !== undefined) {
       simulation.setGridEnabled(body.gridEnabled);
+    }
+
+    if (body.facetTrailEnabled !== undefined) {
+      simulation.setFacetTrailEnabled(body.facetTrailEnabled);
+    }
+
+    if (body.courierEnabled !== undefined) {
+      simulation.setCourierEnabled(body.courierEnabled);
     }
 
     if (body.universeSeed !== undefined) {

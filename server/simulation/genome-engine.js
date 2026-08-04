@@ -1,4 +1,4 @@
-import { factorize } from "./prime-registry.js";
+import { genomeDecimal, genomeExpression, genomePrimes, normalizeGenome } from "./genome.js";
 
 const ORGANISM_PRIMES = new Map([
   [2, {
@@ -48,27 +48,12 @@ const ORGANISM_PRIMES = new Map([
   }]
 ]);
 
-function formatExpression(number, factors) {
-  const powers = new Map();
-  for (const factor of factors) {
-    powers.set(factor, (powers.get(factor) ?? 0) + 1);
-  }
-
-  return `${number} = ${[...powers.entries()]
-    .map(([prime, power]) => (power === 1 ? prime : `${prime}^${power}`))
-    .join(" x ")}`;
-}
-
 export class GenomeEngine {
   construct(genome) {
-    const number = Number(genome);
-    if (!Number.isSafeInteger(number) || number < 2) {
-      throw new Error("A genome must be an integer greater than one.");
-    }
-
-    const factors = factorize(number);
-    const powers = Object.fromEntries(factors.map((prime) => [prime, factors.filter((factor) => factor === prime).length]));
-    const capabilities = [...new Set(factors)].map((prime) => {
+    const exponents = normalizeGenome(genome);
+    const factors = genomePrimes(exponents);
+    const powers = exponents;
+    const capabilities = factors.map((prime) => {
       const capability = ORGANISM_PRIMES.get(prime);
       if (!capability) {
         throw new Error(`Prime ${prime} is not registered for organism construction.`);
@@ -92,10 +77,11 @@ export class GenomeEngine {
     }
 
     return {
-      number,
+      genome: exponents,
+      number: genomeDecimal(exponents),
       factors,
       powers,
-      expression: formatExpression(number, factors),
+      expression: genomeExpression(exponents),
       capabilities,
       traits
     };
