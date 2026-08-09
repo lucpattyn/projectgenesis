@@ -45,6 +45,16 @@ const ORGANISM_PRIMES = new Map([
     name: "Structural Coupling",
     description: "Builds a Bind output that can maintain physical links and expose direct neighbors' persistent state.",
     trait: "canCouple"
+  }],
+  [41, {
+    name: "Environmental Write",
+    description: "Builds a graph output that can deposit a neutral scalar into the occupied world cell at an energy cost.",
+    trait: "canWriteEnvironment"
+  }],
+  [43, {
+    name: "Environmental Read",
+    description: "Builds a graph input that receives the neutral scalar stored in the occupied world cell.",
+    trait: "canReadEnvironment"
   }]
 ]);
 

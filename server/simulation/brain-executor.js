@@ -5,7 +5,8 @@ const EFFECTOR_IDS = {
   consume: "p5-consume",
   reproduce: "p7-reproduce",
   signal: "p19-output",
-  bind: "p31-bind"
+  bind: "p31-bind",
+  environmentWrite: "p41-environment-write"
 };
 
 const DIRECTION_EFFECTOR_IDS = {

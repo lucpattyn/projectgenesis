@@ -30,6 +30,26 @@ Mobile couriers are disabled by default and can be enabled from Settings for a c
 
 The canvas retains an observational **facet-work trail**. Each tick that a strong closed facet occupies a cell adds a faint persistent gold heat value to that cell. It resets with the world and is never read by organisms or used by any ecological rule. Long runs therefore reveal where structural work concentrated, migrated, or disappeared without altering the simulation being measured.
 
+## Phase 16: Environmental Memory
+
+Every cell now has a neutral `[0, 1]` environmental-memory scalar with slow deterministic decay and synchronous cardinal diffusion. Prime 41 adds an energy-costly graph write effector; Prime 43 adds a graph read sensor. Neither has a built-in interpretation and environmental memory never directly changes food, energy, movement, reproduction, signals, gates, or any other ecological system. The Settings panel can show or hide its blue-purple visualization without altering the layer. The Evolution Lab compares memory-disabled, write-only, read-only, and read+write mutation availability conditions under the same gate ecology.
+
+## Energetic Economics
+
+Energetic Economics is an observation phase, not a new survival mechanism. Every organism now retains a lifetime energy ledger and the simulation aggregates it into 100-tick windows. The ledger separates food and gate-work income from movement, baseline/genome maintenance, perception, bond coupling, memory writing, signals, and idle costs. Reproduction and structural bond seeding are reported as **allocations**: they move energy into a child or structural reserve rather than destroy it. Each death records its immediate cause, while the world reports food energy that remains physically available but unharvested. This makes a population crash inspectable without falsely treating energy transfers as costs or claiming that all available food was accessible.
+
+The ledger also records surplus discarded at an organism's finite energy-storage ceiling. An initial capacity mechanism screen shows that reducing this overflow greatly increases short-run births and facets, but it also produces much denser populations. Storage capacity therefore remains an experimental variable, not a new live-world rule, until long-horizon replicated persistence results are available.
+
+An additional disabled-by-default structural-overflow experiment can retain a lossy fraction of otherwise discarded surplus in an existing bond or closed-facet reserve. The first matched screen found a small directional benefit for bond capture and an unfavorable facet-capture result because reserve capacity fills quickly. It is an experimental diagnostic, never an automatic live-world subsidy.
+
+The live world now enables a separate **critical-only one-hop relay**: after ordinary direct bond support fails, a member at energy `<= 2` may receive one bounded, lossy relay from an adjacent reserve-rich bond through their shared partner. It is not a global pool, cannot help loose organisms, respects reserve floors and capacities, and remains available as an off control for matched experiments. Its short-run evidence is promising but not yet a long-horizon persistence claim.
+
+## Phase 16: Energy Logistics
+
+Energy Logistics extends the ledger into a bounded per-tick research time series. It records population turnover, energy stocks and flows, bond and facet reserves, gate activity, reproductive investment, lineage longevity, and energy inequality (minimum, maximum, mean, median, standard deviation, and Gini coefficient). It is diagnostic only: no ecological rule changes. The full protocol and interpretation constraints are in `PHASE_16_ENERGY_LOGISTICS.md`.
+
+The live default seed is `160103`, selected because it reproducibly exhibits a rich early structural phase under the current configuration. It is a demonstrator and research baseline, not a claim of guaranteed long-horizon persistence; changing world settings or the seed defines a different experiment.
+
 The first 1,000-tick matched screen established that gates are survival-critical in the task-rich resource-limited setting: all gate-disabled replicates went extinct, while gate-enabled replicates persisted and reached later generations. Gate production is now port-coupled to the three occupied cells of the exact working facet and records provenance on every food unit. A matched 500-tick production sweep found a viable high-output port regime: 95 mean final facets and 56.7 bonds, versus 5 facets and 13.3 bonds for the matched diffuse-field control. The default port rate is therefore 0.9 ordinary food units per field-strength tick. Output remains physical and contestable; the remaining research question is its longer-horizon stability, not whether it can support a rich structural phase. Full method and results are in `EVOLUTIONARY_VALIDATION_HANDOFF.md`.
 
 ## Niche-dependence experiment

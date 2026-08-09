@@ -16,9 +16,13 @@ export class World {
     this.detritus = [];
     this.ash = [];
     this.nutrients = [];
+    this.deathResidue = [];
+    this.overflowPlume = [];
     this.fertility = [];
     this.environment = {};
     this.engineeredFertility = [];
+    this.environmentMemory = [];
+    this.environmentMemoryAgeMass = [];
     this.reset();
   }
 
@@ -29,8 +33,12 @@ export class World {
     this.detritus = [];
     this.ash = [];
     this.nutrients = [];
+    this.deathResidue = [];
+    this.overflowPlume = [];
     this.fertility = [];
     this.engineeredFertility = [];
+    this.environmentMemory = [];
+    this.environmentMemoryAgeMass = [];
 
     for (let y = 0; y < this.height; y += 1) {
       const row = [];
@@ -55,11 +63,101 @@ export class World {
       this.detritus.push(Array(this.width).fill(0));
       this.ash.push(Array(this.width).fill(0));
       this.nutrients.push(Array(this.width).fill(0));
+      this.deathResidue.push(Array(this.width).fill(0));
+      this.overflowPlume.push(Array(this.width).fill(0));
       this.fertility.push(Array(this.width).fill(1));
       this.engineeredFertility.push(Array(this.width).fill(0));
+      this.environmentMemory.push(Array(this.width).fill(0));
+      this.environmentMemoryAgeMass.push(Array(this.width).fill(0));
     }
     // Environmental state is extensible by layer; fertility is the first canonical layer.
-    this.environment = { fertility: this.fertility, engineeredFertility: this.engineeredFertility };
+    this.environment = { fertility: this.fertility, engineeredFertility: this.engineeredFertility, memory: this.environmentMemory };
+  }
+
+  readEnvironmentMemory(x, y) {
+    const position = this.wrapPosition(x, y);
+    return this.environmentMemory[position.y][position.x];
+  }
+
+  writeEnvironmentMemory(x, y, amount) {
+    const position = this.wrapPosition(x, y);
+    const before = this.environmentMemory[position.y][position.x];
+    const next = Math.min(1, Math.max(0, before + Math.max(0, Number(amount) || 0)));
+    this.environmentMemory[position.y][position.x] = next;
+    return next - before;
+  }
+
+  updateEnvironmentMemory(config) {
+    if (!config.enabled) return { gained: 0, decayed: 0 };
+    const next = Array.from({ length: this.height }, () => Array(this.width).fill(0));
+    const nextAgeMass = Array.from({ length: this.height }, () => Array(this.width).fill(0));
+    let beforeTotal = 0;
+    let afterDecayTotal = 0;
+    for (let y = 0; y < this.height; y += 1) {
+      for (let x = 0; x < this.width; x += 1) {
+        const value = this.environmentMemory[y][x];
+        const decayed = value * config.decayRate;
+        const agedMass = this.environmentMemoryAgeMass[y][x] * config.decayRate + decayed;
+        beforeTotal += value;
+        afterDecayTotal += decayed;
+        const neighbors = [{ x, y: y - 1 }, { x: x + 1, y }, { x, y: y + 1 }, { x: x - 1, y }]
+          .map((candidate) => this.wrapPosition(candidate.x, candidate.y));
+        const uniqueNeighbors = [...new Map(neighbors.map((position) => [`${position.x},${position.y}`, position])).values()];
+        const spread = decayed * config.diffusionRate;
+        const spreadAge = agedMass * config.diffusionRate;
+        next[y][x] += decayed - spread;
+        nextAgeMass[y][x] += agedMass - spreadAge;
+        for (const neighbor of uniqueNeighbors) {
+          next[neighbor.y][neighbor.x] += spread / uniqueNeighbors.length;
+          nextAgeMass[neighbor.y][neighbor.x] += spreadAge / uniqueNeighbors.length;
+        }
+      }
+    }
+    this.environmentMemory = next.map((row) => row.map((value) => Math.min(1, Math.max(0, value))));
+    this.environmentMemoryAgeMass = nextAgeMass;
+    this.environment.memory = this.environmentMemory;
+    return { gained: 0, decayed: Math.max(0, beforeTotal - afterDecayTotal) };
+  }
+
+  getEnvironmentMemoryStatistics(config) {
+    const threshold = config.regionThreshold;
+    let total = 0;
+    let ageMass = 0;
+    let coverage = 0;
+    const visited = Array.from({ length: this.height }, () => Array(this.width).fill(false));
+    let largestRegion = 0;
+    let regions = 0;
+    for (let y = 0; y < this.height; y += 1) for (let x = 0; x < this.width; x += 1) {
+      const value = this.environmentMemory[y][x];
+      total += value;
+      ageMass += this.environmentMemoryAgeMass[y][x];
+      if (value >= config.coverageThreshold) coverage += 1;
+      if (visited[y][x] || value < threshold) continue;
+      regions += 1;
+      let size = 0;
+      const queue = [{ x, y }];
+      visited[y][x] = true;
+      while (queue.length) {
+        const current = queue.shift();
+        size += 1;
+        for (const neighbor of [{ x: current.x, y: current.y - 1 }, { x: current.x + 1, y: current.y }, { x: current.x, y: current.y + 1 }, { x: current.x - 1, y: current.y }]) {
+          const position = this.wrapPosition(neighbor.x, neighbor.y);
+          if (visited[position.y][position.x] || this.environmentMemory[position.y][position.x] < threshold) continue;
+          visited[position.y][position.x] = true;
+          queue.push(position);
+        }
+      }
+      largestRegion = Math.max(largestRegion, size);
+    }
+    const cells = this.width * this.height;
+    return {
+      average: total / cells,
+      total,
+      coverage: coverage / cells,
+      largestRegion,
+      regions,
+      meanLifetime: total > 0 ? ageMass / total : 0
+    };
   }
 
   wrapPosition(x, y) {
@@ -197,6 +295,7 @@ export class World {
         tile.type = TILE_TYPES.FOOD;
         tile.resource = this.chooseResourceType();
         tile.foodOrigin = null;
+        tile.foodEnergy = 1;
         if (chemistry.enabled && this.nutrients[y][x] > 0) {
           this.nutrients[y][x] = Math.max(0, this.nutrients[y][x] - chemistry.nutrientCostPerFood);
         }
@@ -275,6 +374,34 @@ export class World {
     this.detritus[position.y][position.x] = Math.min(1, this.detritus[position.y][position.x] + amount);
   }
 
+  addDeathResidue(x, y, energy, maximum) {
+    const position = this.wrapPosition(x, y);
+    const accepted = Math.min(Math.max(0, energy), Math.max(0, maximum - this.deathResidue[position.y][position.x]));
+    this.deathResidue[position.y][position.x] += accepted;
+    return accepted;
+  }
+
+  takeDeathResidue(x, y, amount) {
+    const position = this.wrapPosition(x, y);
+    const taken = Math.min(Math.max(0, amount), this.deathResidue[position.y][position.x]);
+    this.deathResidue[position.y][position.x] -= taken;
+    return taken;
+  }
+
+  addOverflowPlume(x, y, energy, maximum) {
+    const position = this.wrapPosition(x, y);
+    const accepted = Math.min(Math.max(0, energy), Math.max(0, maximum - this.overflowPlume[position.y][position.x]));
+    this.overflowPlume[position.y][position.x] += accepted;
+    return accepted;
+  }
+
+  takeOverflowPlume(x, y, amount) {
+    const position = this.wrapPosition(x, y);
+    const taken = Math.min(Math.max(0, amount), this.overflowPlume[position.y][position.x]);
+    this.overflowPlume[position.y][position.x] -= taken;
+    return taken;
+  }
+
   materialAt(x, y) {
     const position = this.wrapPosition(x, y);
     return this.detritus[position.y][position.x] + this.ash[position.y][position.x];
@@ -299,24 +426,33 @@ export class World {
       tile.type = TILE_TYPES.FOOD;
       tile.resource = this.chooseResourceType();
       tile.foodOrigin = null;
+      tile.foodEnergy = 1;
       foodReleased = 1;
     }
     return { material: detritusUsed + ashUsed, nutrients, foodReleased };
   }
 
-  harvestFood(x, y, ecology = DEFAULT_CONFIG.ecology) {
+  harvestFood(x, y, ecology = DEFAULT_CONFIG.ecology, requestedAmount = 1) {
     const tile = this.getTile(x, y);
     if (tile.type !== TILE_TYPES.FOOD) return null;
 
     const resource = tile.resource ?? RESOURCE_TYPES.GREEN;
     const foodOrigin = tile.foodOrigin;
-    tile.type = TILE_TYPES.EMPTY;
-    tile.resource = null;
-    tile.foodOrigin = null;
-    if (ecology.localFertilityEnabled) {
-      this.fertility[tile.y][tile.x] = Math.max(0, this.fertility[tile.y][tile.x] - ecology.fertilityLossPerHarvest);
+    const availableAmount = Math.max(0, Math.min(1, tile.foodEnergy ?? 1));
+    const amount = Math.min(availableAmount, Math.max(0, requestedAmount));
+    if (amount <= 0) return null;
+    const remainingAmount = Math.max(0, availableAmount - amount);
+    tile.foodEnergy = remainingAmount;
+    if (remainingAmount <= 0.000001) {
+      tile.type = TILE_TYPES.EMPTY;
+      tile.resource = null;
+      tile.foodOrigin = null;
+      tile.foodEnergy = 0;
     }
-    return { resource, foodOrigin };
+    if (ecology.localFertilityEnabled) {
+      this.fertility[tile.y][tile.x] = Math.max(0, this.fertility[tile.y][tile.x] - ecology.fertilityLossPerHarvest * amount);
+    }
+    return { resource, foodOrigin, amount, remainingAmount };
   }
 
   burnFood(x, y, chemistryEnabled) {
@@ -325,6 +461,7 @@ export class World {
       tile.type = TILE_TYPES.EMPTY;
       tile.resource = null;
       tile.foodOrigin = null;
+      tile.foodEnergy = 0;
       if (chemistryEnabled) this.ash[tile.y][tile.x] = Math.min(1, this.ash[tile.y][tile.x] + 1);
     }
   }
@@ -338,9 +475,16 @@ export class World {
           this.fertility[y][x] = Math.min(1, this.fertility[y][x] + ecology.fertilityRecoveryPerTick);
         }
         if (!chemistry.enabled) continue;
+        if (chemistry.deathResidueEnabled) {
+          this.deathResidue[y][x] = Math.max(0, this.deathResidue[y][x] - chemistry.deathResidueDecay);
+        }
+        if (chemistry.overflowPlumeEnabled) {
+          this.overflowPlume[y][x] = Math.max(0, this.overflowPlume[y][x] - chemistry.overflowPlumeDecay);
+        }
         if (this.tiles[y][x].type === TILE_TYPES.FOOD && this.random() < chemistry.foodDecayRate) {
           this.tiles[y][x].type = TILE_TYPES.EMPTY;
           this.tiles[y][x].resource = null;
+          this.tiles[y][x].foodEnergy = 0;
           this.detritus[y][x] = Math.min(1, this.detritus[y][x] + 1);
         }
         const fromDetritus = Math.min(this.detritus[y][x], chemistry.detritusToNutrients);
@@ -378,6 +522,10 @@ export class World {
     return this.tiles.map((row) => row.map((tile) => tile.resource));
   }
 
+  serializeFoodAmounts() {
+    return this.tiles.map((row) => row.map((tile) => Number((tile.foodEnergy ?? 0).toFixed(3))));
+  }
+
   serializeFires() {
     return [...this.fires.keys()].map((key) => {
       const [x, y] = key.split(",").map(Number);
@@ -390,7 +538,7 @@ export class World {
   }
 
   serializeChemistry() {
-    return { detritus: this.detritus, ash: this.ash, nutrients: this.nutrients, fertility: this.fertility };
+    return { detritus: this.detritus, ash: this.ash, nutrients: this.nutrients, deathResidue: this.deathResidue, overflowPlume: this.overflowPlume, fertility: this.fertility };
   }
 
   serializeEnvironment() {

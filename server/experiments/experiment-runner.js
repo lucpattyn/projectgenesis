@@ -22,12 +22,12 @@ const DEFAULT_SETTINGS = {
 };
 
 const SCENARIOS = [
-  { id: "gate-port-low", label: "Port-coupled: low output", collectiveWorkEnabled: true, gateOutputMode: "port-coupled", gatePortFoodRate: 0.36, courierEnabled: false },
-  { id: "gate-port-medium", label: "Port-coupled: medium output", collectiveWorkEnabled: true, gateOutputMode: "port-coupled", gatePortFoodRate: 0.6, courierEnabled: false },
-  { id: "gate-port-high", label: "Port-coupled: high output", collectiveWorkEnabled: true, gateOutputMode: "port-coupled", gatePortFoodRate: 0.9, courierEnabled: false },
-  { id: "gate-diffuse", label: "Diffuse gate fields", collectiveWorkEnabled: true, gateOutputMode: "diffuse", courierEnabled: false },
-  { id: "gate-disabled", label: "Consensus gates disabled", collectiveWorkEnabled: false, courierEnabled: false }
+  { id: "memory-disabled", label: "Memory disabled", memoryEnabled: false, memoryPrimes: [] },
+  { id: "memory-write-only", label: "Memory write only", memoryEnabled: true, memoryPrimes: [41] },
+  { id: "memory-read-only", label: "Memory read only", memoryEnabled: true, memoryPrimes: [43] },
+  { id: "memory-read-write", label: "Memory read + write", memoryEnabled: true, memoryPrimes: [41, 43] }
 ];
+const BASE_MUTATION_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 31];
 
 function mean(records, key) {
   return Number((records.reduce((total, record) => total + record.final[key], 0) / Math.max(1, records.length)).toFixed(3));
@@ -118,12 +118,14 @@ export class ExperimentRunner {
     simulation.config.refinery.enabled = false;
     simulation.nicheMaintenanceEnabled = false;
     simulation.config.collectiveWork.enabled = task.scenario.collectiveWorkEnabled;
-    simulation.config.collectiveWork.gateOutputMode = task.scenario.gateOutputMode ?? "port-coupled";
-    simulation.config.collectiveWork.gatePortFoodRate = task.scenario.gatePortFoodRate ?? simulation.config.collectiveWork.gatePortFoodRate;
-    simulation.config.courier.enabled = task.scenario.courierEnabled ?? true;
+    simulation.config.collectiveWork.enabled = true;
+    simulation.config.collectiveWork.gateOutputMode = "port-coupled";
+    simulation.config.collectiveWork.gatePortFoodRate = 0.9;
+    simulation.config.courier.enabled = false;
+    simulation.config.environmentMemory.enabled = task.scenario.memoryEnabled;
+    simulation.config.organism.mutationPrimes = [...BASE_MUTATION_PRIMES, ...task.scenario.memoryPrimes];
     simulation.config.collectiveWork.gateCount = 10;
     simulation.config.collectiveWork.gateRadius = 4;
-    if (!task.scenario.collectiveWorkEnabled) simulation.workGates = [];
     simulation.nicheMaintenanceEnabled = task.scenario.maintenance;
     simulation.config.hazards.fireEnabled = false;
     simulation.setSeed(task.seed);
@@ -142,6 +144,7 @@ export class ExperimentRunner {
     const living = simulation.organisms.filter((organism) => organism.alive);
     const p31Carriers = living.filter((organism) => organism.genomeProfile.traits.canCouple).length;
     const totalEnergy = living.reduce((total, organism) => total + organism.energy, 0);
+    const economics = simulation.energyEconomicsSnapshot();
     return {
       tick: ticks,
       population: living.length,
@@ -149,6 +152,8 @@ export class ExperimentRunner {
       averageEnergy: Number((totalEnergy / Math.max(1, living.length)).toFixed(2)),
       p31Carriers,
       p31Frequency: Number((p31Carriers / Math.max(1, living.length)).toFixed(4)),
+      p41Carriers: living.filter((organism) => organism.genomeProfile.traits.canWriteEnvironment).length,
+      p43Carriers: living.filter((organism) => organism.genomeProfile.traits.canReadEnvironment).length,
       bonds: simulation.bonds.size,
       facets: simulation.getFacets().length,
       facetCapital: Number([...simulation.facetReserves.values()].reduce((total, value) => total + value, 0).toFixed(2)),
@@ -167,6 +172,20 @@ export class ExperimentRunner {
       gateFieldOtherHarvests: simulation.collectiveWorkFieldHarvestsByOthers
       ,courierReports: simulation.courierReportsCreated
       ,courierHandoffs: simulation.courierHandoffs
+      ,memoryAverage: Number(simulation.world.getEnvironmentMemoryStatistics(simulation.config.environmentMemory).average.toFixed(5))
+      ,memoryCoverage: Number(simulation.world.getEnvironmentMemoryStatistics(simulation.config.environmentMemory).coverage.toFixed(5))
+      ,memoryLargestRegion: simulation.world.getEnvironmentMemoryStatistics(simulation.config.environmentMemory).largestRegion
+      ,memoryLifetime: Number(simulation.world.getEnvironmentMemoryStatistics(simulation.config.environmentMemory).meanLifetime.toFixed(3))
+      ,memoryWrites: simulation.environmentMemoryWrites
+      ,energyIncome: economics.totalIncome
+      ,energyExpenses: economics.totalExpenses
+      ,energyLosses: economics.totalLosses
+      ,capacityOverflow: economics.losses.capacityOverflow
+      ,unharvestedPotentialEnergy: economics.unharvestedPotentialEnergy
+      ,reproductionAllocation: economics.allocations.reproduction
+      ,structuralSeedAllocation: economics.allocations.structuralSeed
+      ,deathCauses: economics.deathCauses
+      ,energyLogistics: simulation.energyLogistics.timeSeries.at(-1) ?? null
     };
   }
 
@@ -211,6 +230,7 @@ export class ExperimentRunner {
         bondsBroken: active.simulation.bondsBroken,
         bondBreakReasons: active.simulation.bondBreakReasons,
         facetBirths: active.simulation.facetBirths,
+        energyLogistics: active.simulation.energyLogistics.timeSeries,
         samples: active.samples
       });
       job.active = null;
@@ -230,6 +250,8 @@ export class ExperimentRunner {
       meanHighestGeneration: mean(records, "highestGeneration"),
       meanP31Frequency: mean(records, "p31Frequency"),
       meanP31Carriers: mean(records, "p31Carriers"),
+      meanP41Carriers: mean(records, "p41Carriers"),
+      meanP43Carriers: mean(records, "p43Carriers"),
       meanBonds: mean(records, "bonds"),
       meanFacets: mean(records, "facets"),
       meanFacetBirths: Number((records.reduce((total, record) => total + record.facetBirths, 0) / records.length).toFixed(2)),
@@ -244,6 +266,17 @@ export class ExperimentRunner {
       meanGateFieldOtherHarvests: mean(records, "gateFieldOtherHarvests"),
       meanCourierReports: mean(records, "courierReports"),
       meanCourierHandoffs: mean(records, "courierHandoffs"),
+      meanMemoryAverage: mean(records, "memoryAverage"),
+      meanMemoryCoverage: mean(records, "memoryCoverage"),
+      meanMemoryLargestRegion: mean(records, "memoryLargestRegion"),
+      meanMemoryLifetime: mean(records, "memoryLifetime"),
+      meanMemoryWrites: mean(records, "memoryWrites"),
+      meanEnergyIncome: mean(records, "energyIncome"),
+      meanEnergyExpenses: mean(records, "energyExpenses"),
+      meanEnergyLosses: mean(records, "energyLosses"),
+      meanCapacityOverflow: mean(records, "capacityOverflow"),
+      meanUnharvestedPotentialEnergy: mean(records, "unharvestedPotentialEnergy"),
+      meanReproductionAllocation: mean(records, "reproductionAllocation"),
       p31Extinctions: records.filter((record) => record.p31ExtinctionTick !== null).length
     }));
     this.history.push({ id: `experiment-${Date.now()}`, startedAt: job.startedAt, completedAt: new Date().toISOString(), settings: job.settings, summary, runs: job.completed });

@@ -129,6 +129,10 @@ async function handleApi(request, response, url) {
       simulation.setFacetTrailEnabled(body.facetTrailEnabled);
     }
 
+    if (body.environmentMemoryVisualizationEnabled !== undefined) {
+      simulation.setEnvironmentMemoryVisualizationEnabled(body.environmentMemoryVisualizationEnabled);
+    }
+
     if (body.courierEnabled !== undefined) {
       simulation.setCourierEnabled(body.courierEnabled);
     }

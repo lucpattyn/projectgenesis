@@ -24,7 +24,7 @@ export const BASE_CONFIG = {
   },
   universe: {
     // A seed makes every Phase 1 experiment reproducible and inspectable.
-    initialSeed: 1,
+    initialSeed: 160103,
     worldNumber: 85470
   },
   world: {
@@ -51,6 +51,8 @@ export const BASE_CONFIG = {
     foodEnergy: 0,
     reproductionThreshold: 0,
     reproductionCostFactor: 0,
+    // Experimental multiplier; the live ecology remains at one normal energy store.
+    energyCapacityMultiplier: 1,
     mutationHueJitter: 0,
     mutationRate: 0,
     genomeMaintenancePerStrength: 0,
@@ -84,6 +86,25 @@ export const BASE_CONFIG = {
     nutrientCostPerFood: 0,
     recoveryAttemptsPerMissingFood: 0,
     maxRecoveryAttempts: 0
+    ,deathResidueEnabled: false,
+    deathResidueFraction: 0.08,
+    deathResidueMaximum: 8,
+    deathResidueDecay: 0.04,
+    deathResidueRecoveryRate: 0.7,
+    deathResidueRecoveryEfficiency: 0.7,
+    deathResidueSenseRadius: 2,
+    // Experimental: harvest overflow can become a visible, short-lived environmental charge.
+    overflowPlumeEnabled: false,
+    overflowPlumeFraction: 0.15,
+    overflowPlumeMaximum: 40,
+    overflowPlumeDecay: 0.5,
+    overflowPlumeSenseRadius: 2,
+    overflowPlumeEnergyPerFood: 40,
+    overflowPlumeNavigation: {
+      enabled: false,
+      detectionRadius: 8,
+      directionBias: 0.8
+    }
   },
   refinery: {
     // Red is a low-energy catalyst. Prime-31 facets spend it to recover existing chemical material.
@@ -104,9 +125,25 @@ export const BASE_CONFIG = {
     nicheGrowthThreshold: 0.25,
     nicheGrowthRate: 0
   },
+  environmentMemory: {
+    // Phase 16: neutral, server-owned scalar state. It has no ecological interpretation.
+    enabled: true,
+    decayRate: 0.9995,
+    diffusionRate: 0.01,
+    writeEnergyCost: 0.12,
+    writeGain: 0.18,
+    coverageThreshold: 0.05,
+    regionThreshold: 0.12
+  },
+  energeticEconomics: {
+    // Observation only: these intervals never alter organism behavior or world physics.
+    intervalTicks: 100,
+    maximumIntervals: 40,
+    maximumTimeSeriesTicks: 5000
+  },
   collectiveWork: {
     enabled: true,
-    gateCount: 4,
+    gateCount: 7,
     gateRadius: 3,
     observeTicks: 8,
     responseTicks: 8,
@@ -118,7 +155,51 @@ export const BASE_CONFIG = {
     gateFieldFoodRate: 0.36,
     // Kept separate from diffuse output so port-coupled ecology can be calibrated without changing its control.
     gatePortFoodRate: 0.9,
+    // A completed gate must pay its first maintenance interval before its gradual field can accumulate.
+    gateStartupFoodUnits: 1,
+    // Each gate is a finite local opportunity. Stock is spent only when physical food is released.
+    gateEnergyStock: 18,
+    gateExhaustionCooldownTicks: 140,
+    // Experimental field-local accounting boundary. Physical gate food remains open to every harvester.
+    prioritizeResponsibleFacetEnergy: false,
     gateFieldSenseRadius: 5,
+    navigation: {
+      // Experimental: only a strong closed facet receives this shared, non-forcing directional cue.
+      enabled: true,
+      detectionRadius: 14,
+      directionBias: 0.8,
+      minimumFacetStrength: 0.7
+    },
+    collectiveStride: {
+      // Experimental logistics mechanism: an intact gate-seeking component avoids redundant individual locomotion.
+      // It reduces only the already-paid movement cost; it never creates or transfers energy.
+      enabled: true,
+      movementCostMultiplier: 0.65,
+      minimumMembers: 3
+    },
+    satietyMigration: {
+      // Experimental harvest restraint: an energy-secure component leaves ordinary food for a sensed gate opportunity.
+      enabled: false,
+      minimumMeanEnergyFraction: 0.72
+    },
+    componentLifecycle: {
+      // Experimental collective logistics: a facet may conserve at its own
+      // weakening field for a bounded interval, then release that commitment
+      // and use the existing local gate-navigation cue to migrate.
+      enabled: true,
+      depletionFieldStrength: 0.25,
+      maxDwellTicksAfterDepletion: 18,
+      conserveMinimumMeanEnergyFraction: 0.55
+    },
+    migrationTransport: {
+      // Experimental physical logistics: a coherent strong component shares
+      // displacement during the explicit migration phase. This reduces only
+      // its existing movement charge; it does not add or transfer energy.
+      enabled: true,
+      movementCostMultiplier: 0.4,
+      minimumMembers: 3,
+      minimumFacetStrength: 0.7
+    },
     // Food is produced at the three visible gate ports while the responsible facet remains intact.
     // "diffuse" is retained only as the matched experimental control.
     gateOutputMode: "port-coupled"
@@ -142,6 +223,15 @@ export const BASE_CONFIG = {
     fertilityRecoveryPerTick: 0,
     fertilityLossPerHarvest: 0,
     minimumFertilityForGrowth: 0
+    ,harvestRestraint: {
+      // Experimental: a forager leaves an ordinary meal in place when the whole meal cannot fit in its store.
+      enabled: false,
+      ordinaryFoodOnly: true
+    },
+    partialHarvesting: {
+      // Experimental: a food tile retains any part of its energy that the current consumer cannot store.
+      enabled: false
+    }
   },
   facet: {
     // Closed bond triangles retain collective harvest capital for structural reproduction.
@@ -150,7 +240,20 @@ export const BASE_CONFIG = {
     harvestBonusFraction: 0.16,
     reserveCapacity: 30,
     reserveRequiredForBirth: 4,
-    reserveInvestmentPerBirth: 4
+    reserveInvestmentPerBirth: 4,
+    autonomousBudding: {
+      // Experimental: an energized strong facet can reproduce its local triangular motif without an individual brain impulse.
+      enabled: false,
+      reserveThreshold: 14,
+      memberEnergyFloor: 110,
+      // Budgeted mode is a separate hypothesis: a component may grow only after
+      // it has demonstrated a positive completed gate-to-gate energy cycle.
+      requirePositiveCompletedCycle: false,
+      minimumComponentEnergy: 0,
+      minimumCycleEnergyDelta: 0,
+      completedCycleFreshnessTicks: 0,
+      cooldownTicks: 0
+    }
   },
   bond: {
     // A meal should keep a maintained structure viable long enough to find its next resource.
@@ -164,8 +267,19 @@ export const BASE_CONFIG = {
     supportReserveFloor: 1.5,
     maxSupportReleasePerTick: 0.35,
     supportLossFraction: 0.15,
+    // Experimental default: ordinary support runs first; this is only an emergency one-hop fallback.
+    relayEnabled: true,
+    relayCriticalEnergy: 2,
+    maxRelayPerTick: 0.5,
+    relayLossFraction: 0.2,
     buddingReserveInvestment: 1.2,
     buddingCandidateTicks: 3
+  },
+  overflowCapture: {
+    // Experimental only. The live ecology discards overflow unless a matched screen enables a mode.
+    mode: "disabled",
+    captureFraction: 0.75,
+    transferEfficiency: 0.85
   },
   render: {
     background: "#08131a",

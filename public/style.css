@@ -836,6 +836,37 @@ input[type="range"] {
   background: linear-gradient(135deg, rgba(115, 240, 168, 0.12), rgba(90, 180, 255, 0.08));
 }
 
+.energy-economics-block {
+  background: linear-gradient(135deg, rgba(255, 176, 91, 0.12), rgba(183, 135, 255, 0.08));
+}
+
+.energy-flows {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+}
+
+.energy-flow {
+  display: grid;
+  grid-template-columns: 94px 1fr 48px;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font: 0.7rem ui-monospace, "Cascadia Code", monospace;
+}
+
+.energy-flow i {
+  display: block;
+  min-height: 8px;
+  border-radius: 999px;
+  background: #ffba65;
+}
+
+.energy-flow.income i { background: #72e6a3; }
+.energy-flow.expense i { background: #ff9a70; }
+.energy-flow.allocation i { background: #a990ff; }
+.energy-flow b { text-align: right; color: var(--text); font-weight: 600; }
+
 .experiment-block > p {
   color: var(--muted);
   font-size: 0.82rem;

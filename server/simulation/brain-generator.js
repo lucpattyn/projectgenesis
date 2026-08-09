@@ -118,8 +118,20 @@ export class BrainGenerator {
       }
     }
 
+    if (factors.has(43)) {
+      nodes.push(node("p43-environment-memory", "Memory in", "sensor", 18, 12, 43));
+      // Read is only a scalar input. Existing graph composition decides whether it matters.
+      if (factors.has(13)) edges.push(edge("p43-environment-memory", "p13-persistence"));
+    }
+
+    if (factors.has(41)) {
+      nodes.push(node("p41-environment-write", "Memory write", "effector", 82, 12, 41));
+      // The write output has no semantic edge; persistent state can compose it with other inputs.
+      if (factors.has(13)) edges.push(edge("p13-persistence", "p41-environment-write"));
+    }
+
     return {
-      status: "Active: generated graphs execute on the server. Prime 17 can drive four Prime-2 directional action outputs; Prime 31 can expose direct neighbors' Prime-13 state.",
+      status: "Active: generated graphs execute on the server. Prime 17 can drive directional outputs; Prime 31 exposes direct neighbor state; Prime 41/43 add neutral environmental write/read nodes.",
       nodes,
       edges
     };

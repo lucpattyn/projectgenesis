@@ -10,6 +10,8 @@ import { average, clamp, createSeededRandom, normalizeSeed } from "./utils.js";
 
 const MAX_TELEMETRY_EVENTS = 1000;
 const MAX_PRIMARY_PRODUCTION_MARKERS = 90;
+const MAX_GATE_CAPTURE_RECORDS = 1000;
+const MAX_OVERFLOW_ROUTING_RECORDS = 1000;
 
 export class Simulation {
   constructor(config = DEFAULT_CONFIG) {
@@ -36,6 +38,8 @@ export class Simulation {
     this.simulationTicks = 0;
     this.births = 0;
     this.deaths = 0;
+    this.resetEnergyEconomics();
+    this.resetEnergyLogistics();
     this.fpsEstimate = 0;
     this.snapshotVersion = 0;
     this.deathMarkers = [];
@@ -60,14 +64,32 @@ export class Simulation {
     this.nicheMaintenanceEnabled = true;
     this.refineryFoodReleased = 0;
     this.refineryNutrientsProduced = 0;
+    this.deathResidueCreated = 0;
+    this.deathResidueRecovered = 0;
+    this.overflowPlumeCreated = 0;
+    this.overflowPlumeCondensed = 0;
+    this.overflowPlumeFoodReleased = 0;
     this.workGates = [];
+    this.gateFacetAssignments = new Map();
     this.collectiveWorkCompletions = 0;
     this.collectiveWorkFoodReleased = 0;
     this.collectiveWorkAttendances = 0;
     this.collectiveWorkFieldHarvests = 0;
     this.collectiveWorkFieldHarvestsByWorkers = 0;
     this.collectiveWorkFieldHarvestsByOthers = 0;
+    this.collectiveGateNavigationMoves = 0;
+    this.collectivePlumeNavigationMoves = 0;
+    this.collectiveGateArrivals = 0;
+    this.componentLifecycle = new Map();
+    this.componentLifecycleDeferrals = 0;
+    this.componentLifecycleMigrations = 0;
     this.collectiveWorkHarvestLineages = new Map();
+    this.gateFoodCaptureRecords = [];
+    this.nextGateFoodCaptureId = 1;
+    this.gateFieldCycles = [];
+    this.nextGateFieldCycleId = 1;
+    this.componentEpisodes = [];
+    this.nextComponentEpisodeId = 1;
     this.nextCourierReportId = 1;
     this.courierReportsCreated = 0;
     this.courierHandoffs = 0;
@@ -78,6 +100,9 @@ export class Simulation {
     this.facetHarvestEnergy = 0;
     this.facetHarvestReserveEnergy = 0;
     this.facetBirths = 0;
+    this.autonomousFacetBirths = 0;
+    this.facetBuddingLedgers = new Map();
+    this.autonomousFacetBuddingDenied = { cooldown: 0, componentEnergy: 0, completedCycle: 0 };
     this.facetReserveSpent = 0;
     this.bondsFed = 0;
     this.bondEnergyFed = 0;
@@ -90,6 +115,24 @@ export class Simulation {
     this.primaryResourceUnits = 0;
     this.primaryPotentialEnergy = 0;
     this.latestPrimaryProduction = 0;
+    this.environmentMemoryWrites = 0;
+    this.environmentMemoryDeposited = 0;
+    this.environmentMemoryEnergySpent = 0;
+    this.environmentMemoryLineages = new Map();
+    this.environmentMemoryVisualizationEnabled = true;
+    this.structuralOverflowCaptured = 0;
+    this.structuralOverflowCapturedByMode = { bond: 0, facet: 0 };
+    this.overflowRoutingRecords = [];
+    this.resetOverflowProvenance();
+    this.satietyMigrationDeferrals = 0;
+    this.resetHarvestGeometry();
+    this.starvationDiagnostics = [];
+    this.bondRelayTransfers = 0;
+    this.bondRelayEnergyWithdrawn = 0;
+    this.bondRelayEnergyDelivered = 0;
+    this.bondRelayRescues = 0;
+    this.resetEnergyEconomics();
+    this.resetEnergyLogistics();
     this.initializeWorkGates();
     this.seedInitialPopulation(this.config.organism.initialPopulation);
     this.start();
@@ -150,21 +193,34 @@ export class Simulation {
 
       this.nextOrganismId += 1;
       this.organisms.push(organism);
+      this.lineageBirthTicks.set(organism.lineageId, this.simulationTicks);
       occupied.add(`${position.x},${position.y}`);
       this.births += 1;
     }
   }
 
   step() {
+    this.organisms.forEach((organism) => { organism.collectiveStrideActive = false; });
+    this.organisms.forEach((organism) => { organism.collectiveTransportActive = false; });
+    this.organisms.forEach((organism) => { organism.satietyMigrationActive = false; });
     this.decayCourierKnowledge();
     this.world.updateFire({ ...this.config.hazards, chemistryEnabled: this.config.chemistry.enabled });
     this.world.updateChemistry(this.config.chemistry, this.config.ecology, this.config.environment);
+    this.recoverDeathResidue();
+    this.condenseOverflowPlumes();
     this.updateFacetNiches();
     this.updateFacetRefineries();
     this.world.decaySignals(this.config.signal.decay);
     const occupiedBefore = new Set(this.organisms.filter((item) => item.alive).map((item) => `${item.x},${item.y}`));
 
     const coupledIds = this.getCoupledIds();
+    this.updateComponentLifecycle();
+    const collectiveStrideEligibleIds = this.getCollectiveStrideEligibleIds();
+    const migrationTransportEligibleIds = this.getMigrationTransportEligibleIds();
+    this.organisms.forEach((organism) => { organism.collectiveTransportActive = migrationTransportEligibleIds.has(organism.id); });
+    const satietyMigrationEligibleIds = this.getSatietyMigrationEligibleIds();
+    const lifecycleConserveIds = this.getComponentLifecycleConserveIds();
+    this.satietyMigrationEligibleIds = satietyMigrationEligibleIds;
     // Capture only prior-tick persistent values, so state transport is one hop and execution order cannot leak information.
     const neighborStatesByOrganism = this.getNeighborStatesByOrganism();
     for (const organism of this.organisms) {
@@ -179,7 +235,15 @@ export class Simulation {
         config: this.config.organism,
         ecologyConfig: this.config.ecology,
         signalConfig: this.config.signal,
+        environmentMemoryConfig: this.config.environmentMemory,
         coupled: coupledIds.has(organism.id),
+        collectiveStrideMultiplier: migrationTransportEligibleIds.has(organism.id)
+          ? this.config.collectiveWork.migrationTransport.movementCostMultiplier
+          : (collectiveStrideEligibleIds.has(organism.id)
+            ? this.config.collectiveWork.collectiveStride.movementCostMultiplier
+            : 1),
+        deferOrdinaryHarvest: satietyMigrationEligibleIds.has(organism.id) || lifecycleConserveIds.has(organism.id),
+        harvestRestraint: this.config.ecology.harvestRestraint,
         structuralFocus: this.getStructuralFocus(organism),
         collectiveWorkCue: this.getCollectiveWorkCue(organism),
         collectiveWorkFields: this.getActiveCollectiveWorkFields(),
@@ -188,10 +252,20 @@ export class Simulation {
         brainExecutor: this.brainExecutor
       });
 
+      let structuralAllocation = 0;
+      let externalBondAllocation = 0;
+      let facetSharing = 0;
+      let externalFacetSharing = 0;
+      let facetCapital = 0;
       if (result.consumedEnergy > 0 && organism.alive) {
-        const structuralAllocation = this.feedAttachedBonds(organism, result.consumedEnergy);
-        this.shareFacetEnergy(organism, result.consumedEnergy - structuralAllocation);
-        this.applyFacetHarvestAdvantage(organism, result.consumedEnergy);
+        const priorityMemberIds = this.getGateFieldEnergyPriority(organism, result.consumedFoodOrigin);
+        const bondAllocation = this.feedAttachedBonds(organism, result.consumedEnergy, priorityMemberIds);
+        structuralAllocation = bondAllocation.total;
+        externalBondAllocation = bondAllocation.external;
+        const sharing = this.shareFacetEnergy(organism, result.consumedEnergy - structuralAllocation, priorityMemberIds);
+        facetSharing = sharing.total;
+        externalFacetSharing = sharing.external;
+        facetCapital = this.applyFacetHarvestAdvantage(organism, result.consumedEnergy);
       }
       if (result.consumedResource === RESOURCE_TYPES.RED && organism.alive) {
         this.storeFacetCatalyst(organism);
@@ -199,13 +273,35 @@ export class Simulation {
       if (result.consumedFoodOrigin?.type === "gate-field") {
         this.recordCollectiveWorkHarvest(organism, result.consumedFoodOrigin);
       }
+      if (result.memoryWrite) this.recordEnvironmentMemoryWrite(organism, result.memoryWrite);
+      if (result.deferredHarvest) {
+        this.satietyMigrationDeferrals += 1;
+        if (lifecycleConserveIds.has(organism.id)) this.componentLifecycleDeferrals += 1;
+      }
+      this.recordHarvestGeometry(organism, result);
+      this.captureStructuralOverflow(organism, result);
+      this.createOverflowPlume(organism, result);
+      this.recordOverflowProvenance(organism, result);
+      this.recordEnergyFlow(organism, result.energyFlow);
+      this.recordGateFieldCycleFlow(organism, result.energyFlow, { structuralAllocation, externalBondAllocation, facetSharing, externalFacetSharing, facetCapital });
+      this.recordComponentEpisodeMigrationFlow(organism, result.energyFlow);
+      this.recordComponentEpisodePhaseFlow(organism, result);
       this.createCourierReport(organism);
 
       if (organism.alive) {
-        this.supportLowEnergyMember(organism);
+        const supportContext = this.getSupportContext(organism);
+        const directSupport = this.supportLowEnergyMember(organism);
+        const relayContext = this.getSupportContext(organism);
+        const relay = this.relayReserveToMember(organism, relayContext);
+        const relayedSupport = relay.delivered > 0 ? this.supportLowEnergyMember(organism) : 0;
+        const supportReceived = directSupport + relayedSupport;
+        this.recordComponentEpisodeMigrationSupport(organism, directSupport, relay.delivered, relayedSupport);
         if (organism.energy <= 0) {
           organism.alive = false;
           organism.deathReason = "energy exhaustion";
+          this.recordStarvationDiagnostic(organism, supportContext, supportReceived, relay);
+        } else if (relay.delivered > 0 && supportContext.energyBeforeSupport <= 0) {
+          this.bondRelayRescues += 1;
         }
       }
 
@@ -213,12 +309,18 @@ export class Simulation {
         occupiedBefore.add(`${organism.x},${organism.y}`);
       }
     }
+    this.recordEnvironmentMemoryReads();
 
     this.moveCompounds();
     this.updateCourierExchange();
     this.handleReproduction();
+    this.handleAutonomousFacetBudding();
     this.updateBonds();
+    this.recordGateCycleReserveMaintenance();
+    this.recordComponentEpisodeMigrationReserveMaintenance();
+    this.recordComponentEpisodePhaseReserveMaintenance();
     this.removeDeadOrganisms();
+    this.updateComponentEpisodes();
     this.updateFacetReserves();
     this.recordFacetWorkTrail();
     this.updateCollectiveWork();
@@ -237,13 +339,26 @@ export class Simulation {
     if (this.primaryProductionMarkers.length > MAX_PRIMARY_PRODUCTION_MARKERS) {
       this.primaryProductionMarkers.splice(0, this.primaryProductionMarkers.length - MAX_PRIMARY_PRODUCTION_MARKERS);
     }
+    this.world.updateEnvironmentMemory(this.config.environmentMemory);
 
     this.simulationTicks += 1;
+    this.captureEnergyEconomicsInterval();
+    this.captureEnergyLogisticsTick();
     this.snapshotVersion += 1;
+  }
+
+  getGateFieldEnergyPriority(organism, origin) {
+    if (!this.config.collectiveWork.prioritizeResponsibleFacetEnergy || origin?.type !== "gate-field") return null;
+    const gate = this.workGates.find((candidate) => candidate.id === origin.gateId);
+    if (!gate || gate.fieldStrength <= 0 || gate.fieldFacetKey !== origin.facetKey) return null;
+    const facet = this.getFacets().find((candidate) => candidate.key === gate.fieldFacetKey);
+    if (!facet || !facet.memberIds.includes(organism.id)) return null;
+    return new Set(facet.memberIds);
   }
 
   handleReproduction() {
     const newborns = [];
+    this.lastOrdinaryReproductionParents = new Set();
     const occupied = new Set(this.organisms.filter((item) => item.alive).map((item) => `${item.x},${item.y}`));
     const reproductionOpportunity = this.getReproductionOpportunity().opportunity;
 
@@ -269,8 +384,12 @@ export class Simulation {
         brainGenerator: this.brainGenerator,
         mutationEngine: this.mutationEngine
       });
+      // This is a transfer into a new organism, not energy destroyed by reproduction.
+      this.energyEconomics.allocations.reproduction += child.energy;
+      if (!this.lineageBirthTicks.has(child.lineageId)) this.lineageBirthTicks.set(child.lineageId, this.simulationTicks);
       this.nextOrganismId += 1;
       newborns.push(child);
+      this.lastOrdinaryReproductionParents.add(organism.id);
       occupied.add(`${childPosition.x},${childPosition.y}`);
       this.births += 1;
       this.birthMarkers.push({
@@ -289,11 +408,13 @@ export class Simulation {
         this.facetBirths += 1;
         this.facetReserveSpent += investment;
         this.structuralSeedEnergy += investment;
+        this.recordEnergyAllocation(organism, "structuralSeed", investment);
         this.recordTelemetry("facet-birth", `Facet ${sourceFacet.key} budded #${child.id} and invested ${investment.toFixed(1)} structural capital into two bond seeds.`);
       } else if (localPosition && child.genomeProfile.traits.canCouple) {
         const seedEnergy = Math.min(organism.energy, this.config.bond.buddingReserveInvestment);
         if (seedEnergy > 0) {
           organism.energy -= seedEnergy;
+          this.recordEnergyAllocation(organism, "structuralSeed", seedEnergy);
           this.seedStructuralBond(organism.id, child.id, seedEnergy);
           this.structuralBirths += 1;
           this.structuralSeedEnergy += seedEnergy;
@@ -306,6 +427,131 @@ export class Simulation {
       }
     }
 
+    this.organisms.push(...newborns);
+  }
+
+  getFacetBuddingLedger(facet) {
+    let ledger = this.facetBuddingLedgers.get(facet.key);
+    if (!ledger) {
+      ledger = {
+        facetKey: facet.key,
+        attempts: 0,
+        births: 0,
+        lastBirthTick: null,
+        lastComponentEnergy: 0,
+        lastQualifiedCycleId: null,
+        lastQualifiedCycleDelta: null,
+        lastQualifiedCycleEndedTick: null
+      };
+      this.facetBuddingLedgers.set(facet.key, ledger);
+    }
+    return ledger;
+  }
+
+  getFacetBuddingBudget(facet, policy) {
+    const componentMemberIds = this.getBondGroups().find((group) => group.includes(facet.memberIds[0])) ?? facet.memberIds;
+    const componentEnergy = this.getComponentEnergy(componentMemberIds);
+    const latestCycle = [...this.componentEpisodes]
+      .reverse()
+      .find((episode) => (
+        episode.outcome === "next-gate-completion"
+        && episode.endedTick !== null
+        && episode.originalMemberIds.some((id) => componentMemberIds.includes(id))
+      ));
+    const cycleIsFresh = latestCycle
+      && (policy.completedCycleFreshnessTicks <= 0
+        || this.simulationTicks - latestCycle.endedTick <= policy.completedCycleFreshnessTicks);
+    const positiveCycle = cycleIsFresh && latestCycle.componentEnergyDelta >= policy.minimumCycleEnergyDelta;
+    return {
+      componentMemberIds,
+      componentEnergy,
+      latestCycle: latestCycle ?? null,
+      qualifies: componentEnergy >= policy.minimumComponentEnergy
+        && (!policy.requirePositiveCompletedCycle || Boolean(positiveCycle))
+    };
+  }
+
+  recordAutonomousFacetBudInComponentLedger(facet, budget, child, investment) {
+    const affected = this.componentEpisodes.filter((episode) => (
+      episode.endedTick === null
+      && episode.originalMemberIds.some((id) => budget.componentMemberIds.includes(id))
+    ));
+    for (const episode of affected) {
+      episode.budding ??= { births: 0, childIds: [], parentEnergyTransferred: 0, reserveInvestment: 0, offspringSurviving: 0 };
+      episode.budding.births += 1;
+      episode.budding.childIds.push(child.id);
+      episode.budding.parentEnergyTransferred += child.energy;
+      episode.budding.reserveInvestment += investment;
+    }
+  }
+
+  handleAutonomousFacetBudding() {
+    const policy = this.config.facet.autonomousBudding;
+    if (!policy.enabled) return;
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const occupied = new Set(this.organisms.filter((organism) => organism.alive).map((organism) => `${organism.x},${organism.y}`));
+    const usedParents = new Set(this.lastOrdinaryReproductionParents ?? []);
+    const newborns = [];
+    const facets = this.getFacets()
+      .map((facet) => ({ ...facet, strength: this.getFacetStrength(facet.memberIds) }))
+      .filter((facet) => facet.strength >= this.config.facet.minimumBondStrength)
+      .sort((first, second) => (this.facetReserves.get(second.key) ?? 0) - (this.facetReserves.get(first.key) ?? 0));
+
+    for (const facet of facets) {
+      const reserve = this.facetReserves.get(facet.key) ?? 0;
+      if (reserve < policy.reserveThreshold) continue;
+      const ledger = this.getFacetBuddingLedger(facet);
+      ledger.attempts += 1;
+      const budget = this.getFacetBuddingBudget(facet, policy);
+      ledger.lastComponentEnergy = Number(budget.componentEnergy.toFixed(3));
+      ledger.lastQualifiedCycleId = budget.latestCycle?.id ?? null;
+      ledger.lastQualifiedCycleDelta = budget.latestCycle?.componentEnergyDelta ?? null;
+      ledger.lastQualifiedCycleEndedTick = budget.latestCycle?.endedTick ?? null;
+      if (policy.cooldownTicks > 0 && ledger.lastBirthTick !== null
+        && this.simulationTicks - ledger.lastBirthTick < policy.cooldownTicks) {
+        this.autonomousFacetBuddingDenied.cooldown += 1;
+        continue;
+      }
+      if (!budget.qualifies) {
+        if (budget.componentEnergy < policy.minimumComponentEnergy) this.autonomousFacetBuddingDenied.componentEnergy += 1;
+        else this.autonomousFacetBuddingDenied.completedCycle += 1;
+        continue;
+      }
+      const members = facet.memberIds.map((id) => byId.get(id)).filter(Boolean);
+      const parent = members
+        .filter((member) => !usedParents.has(member.id) && member.energy >= policy.memberEnergyFloor)
+        .sort((first, second) => second.energy - first.energy)[0];
+      if (!parent) continue;
+      const birthSite = this.findFacetBirthSite(parent, facet, occupied);
+      if (!birthSite) continue;
+
+      const child = parent.reproduce(this.nextOrganismId, birthSite.position, this.config.organism, {
+        genomeEngine: this.genomeEngine,
+        brainGenerator: this.brainGenerator,
+        mutationEngine: this.mutationEngine
+      });
+      const investment = Math.min(this.config.facet.reserveInvestmentPerBirth, reserve);
+      this.facetReserves.set(facet.key, reserve - investment);
+      this.seedStructuralBond(parent.id, child.id, investment / 2);
+      this.seedStructuralBond(birthSite.partner.id, child.id, investment / 2);
+      this.recordEnergyAllocation(parent, "structuralSeed", investment);
+      this.energyEconomics.allocations.reproduction += child.energy;
+      this.nextOrganismId += 1;
+      newborns.push(child);
+      occupied.add(`${child.x},${child.y}`);
+      usedParents.add(parent.id);
+      this.births += 1;
+      this.structuralBirths += 1;
+      this.facetBirths += 1;
+      this.autonomousFacetBirths += 1;
+      ledger.births += 1;
+      ledger.lastBirthTick = this.simulationTicks;
+      this.facetReserveSpent += investment;
+      this.structuralSeedEnergy += investment;
+      this.recordAutonomousFacetBudInComponentLedger(facet, budget, child, investment);
+      this.birthMarkers.push({ x: child.x, y: child.y, ttl: 10 });
+      this.recordTelemetry("autonomous-facet-bud", `Facet ${facet.key} budded #${child.id}, spending parent energy and ${investment.toFixed(1)} reserve on two inherited bond seeds.`);
+    }
     this.organisms.push(...newborns);
   }
 
@@ -375,6 +621,12 @@ export class Simulation {
   removeDeadOrganisms() {
     const deadOrganisms = this.organisms.filter((organism) => !organism.alive);
     for (const organism of deadOrganisms) {
+      const storedEnergy = Math.max(0, organism.energy);
+      const residueEnergy = this.config.chemistry.deathResidueEnabled
+        ? this.world.addDeathResidue(organism.x, organism.y, Math.min(storedEnergy * this.config.chemistry.deathResidueFraction, this.config.chemistry.deathResidueMaximum), this.config.chemistry.deathResidueMaximum)
+        : 0;
+      this.deathResidueCreated += residueEnergy;
+      this.recordEnergyDeath(organism, residueEnergy);
       if (this.config.chemistry.enabled) this.world.addDetritus(organism.x, organism.y);
       this.deathMarkers.push({
         x: organism.x,
@@ -387,6 +639,410 @@ export class Simulation {
     this.organisms = this.organisms.filter((organism) => organism.alive);
     this.removeInvalidBonds();
     this.deaths += before - this.organisms.length;
+  }
+
+  resetEnergyEconomics() {
+    this.energyEconomics = {
+      income: { food: 0, gateWork: 0 },
+      expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, bondReserveMaintenance: 0, gateWork: 0, memory: 0, signals: 0, idle: 0 },
+      losses: { capacityOverflow: 0, deathStoredEnergy: 0, relayTransfer: 0 },
+      allocations: { reproduction: 0, structuralSeed: 0, structuralOverflow: 0 },
+      deaths: {},
+      intervals: [],
+      checkpoint: { income: { food: 0, gateWork: 0 }, expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, bondReserveMaintenance: 0, gateWork: 0, memory: 0, signals: 0, idle: 0 }, losses: { capacityOverflow: 0, deathStoredEnergy: 0, relayTransfer: 0 }, allocations: { reproduction: 0, structuralSeed: 0, structuralOverflow: 0 }, deaths: {} }
+    };
+  }
+
+  recordEnergyFlow(organism, flow) {
+    if (!flow) return;
+    for (const [kind, values] of Object.entries(flow)) {
+      for (const [key, value] of Object.entries(values)) {
+        this.energyEconomics[kind][key] += value;
+      }
+    }
+  }
+
+  recordEnergyAllocation(organism, category, amount) {
+    organism.energyLedger.allocations[category] += amount;
+    this.energyEconomics.allocations[category] += amount;
+  }
+
+  captureStructuralOverflow(organism, result) {
+    const settings = this.config.overflowCapture;
+    if (!organism.alive || settings.mode === "disabled" || result.overflowEnergy <= 0) return 0;
+    let remaining = result.overflowEnergy * settings.captureFraction * settings.transferEfficiency;
+    let captured = 0;
+    if (settings.mode === "bond") {
+      const attached = [...this.bonds.values()]
+        .filter((bond) => bond.firstId === organism.id || bond.secondId === organism.id)
+        .sort((first, second) => (first.reserve ?? 0) - (second.reserve ?? 0));
+      for (const bond of attached) {
+        const reserve = bond.reserve ?? this.config.bond.initialReserve;
+        const deposited = Math.min(remaining, Math.max(0, this.config.bond.reserveCapacity - reserve));
+        if (deposited <= 0) continue;
+        bond.reserve = reserve + deposited;
+        captured += deposited;
+        remaining -= deposited;
+        this.energyTransfers.push({ fromId: organism.id, toId: bond.firstId === organism.id ? bond.secondId : bond.firstId, amount: Number(deposited.toFixed(2)), ttl: 6, kind: "overflow-routing" });
+        this.overflowRoutingRecords.push({
+          tick: this.simulationTicks,
+          mode: "bond",
+          fromId: organism.id,
+          bond: this.bondKey(bond.firstId, bond.secondId),
+          amount: Number(deposited.toFixed(3)),
+          reserveBefore: Number(reserve.toFixed(3)),
+          reserveAfter: Number(bond.reserve.toFixed(3))
+        });
+        if (this.overflowRoutingRecords.length > MAX_OVERFLOW_ROUTING_RECORDS) this.overflowRoutingRecords.shift();
+        if (remaining <= 0) break;
+      }
+    } else if (settings.mode === "facet") {
+      const facet = this.getStrongestFacetForMember(organism.id);
+      if (facet && facet.strength >= this.config.facet.minimumBondStrength) {
+        const reserve = this.facetReserves.get(facet.key) ?? 0;
+        captured = Math.min(remaining, Math.max(0, this.config.facet.reserveCapacity - reserve));
+        if (captured > 0) this.facetReserves.set(facet.key, reserve + captured);
+      }
+    }
+    if (captured <= 0) return 0;
+    result.energyFlow.losses.capacityOverflow -= captured;
+    organism.energyLedger.losses.capacityOverflow -= captured;
+    this.recordEnergyAllocation(organism, "structuralOverflow", captured);
+    this.structuralOverflowCaptured += captured;
+    this.structuralOverflowCapturedByMode[settings.mode] += captured;
+    return captured;
+  }
+
+  createOverflowPlume(organism, result) {
+    const chemistry = this.config.chemistry;
+    const discarded = result.energyFlow?.losses?.capacityOverflow ?? 0;
+    if (!chemistry.overflowPlumeEnabled || discarded <= 0) return 0;
+    const accepted = this.world.addOverflowPlume(
+      organism.x,
+      organism.y,
+      discarded * chemistry.overflowPlumeFraction,
+      chemistry.overflowPlumeMaximum
+    );
+    if (accepted <= 0) return 0;
+    result.energyFlow.losses.capacityOverflow -= accepted;
+    organism.energyLedger.losses.capacityOverflow -= accepted;
+    this.overflowPlumeCreated += accepted;
+    return accepted;
+  }
+
+  findFacetOverflowPlume(members) {
+    const radius = this.config.chemistry.overflowPlumeSenseRadius;
+    const positions = new Map();
+    for (const member of members) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const position = this.world.wrapPosition(member.x + dx, member.y + dy);
+          positions.set(`${position.x},${position.y}`, position);
+        }
+      }
+    }
+    return [...positions.values()]
+      .filter((position) => this.world.overflowPlume[position.y][position.x] >= this.config.chemistry.overflowPlumeEnergyPerFood)
+      .filter((position) => members.every((member) => this.distanceBetweenPositions(member, position) <= radius))
+      .sort((first, second) => this.world.overflowPlume[second.y][second.x] - this.world.overflowPlume[first.y][first.x])[0] ?? null;
+  }
+
+  condenseOverflowPlumes() {
+    const chemistry = this.config.chemistry;
+    if (!chemistry.overflowPlumeEnabled) return;
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    for (const facet of this.getFacets()) {
+      if (this.getFacetStrength(facet.memberIds) < this.config.facet.minimumBondStrength) continue;
+      const members = facet.memberIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== 3) continue;
+      const plume = this.findFacetOverflowPlume(members);
+      if (!plume) continue;
+      const tile = this.world.getTile(plume.x, plume.y);
+      if (tile.type !== TILE_TYPES.EMPTY || this.world.isBurning(plume.x, plume.y)) continue;
+      const condensed = this.world.takeOverflowPlume(plume.x, plume.y, chemistry.overflowPlumeEnergyPerFood);
+      if (condensed < chemistry.overflowPlumeEnergyPerFood) continue;
+      tile.type = TILE_TYPES.FOOD;
+      tile.resource = RESOURCE_TYPES.GREEN;
+      tile.foodEnergy = 1;
+      tile.foodOrigin = { type: "overflow-plume", facetKey: facet.key, condensedTick: this.simulationTicks };
+      this.overflowPlumeCondensed += condensed;
+      this.overflowPlumeFoodReleased += 1;
+      this.recordTelemetry("overflow-plume-condensed", `Facet ${facet.key} condensed ${condensed.toFixed(1)} overflow charge at ${plume.x},${plume.y}.`);
+    }
+  }
+
+  resetHarvestGeometry() {
+    this.harvestGeometry = {
+      attempts: 0,
+      wouldOverflow: 0,
+      reproductionEligible: 0,
+      restrained: 0,
+      partialHarvests: 0,
+      energyRetainedInFood: 0,
+      byOrigin: new Map(),
+      byResource: new Map()
+    };
+  }
+
+  recordHarvestGeometry(organism, result) {
+    const decision = result.harvestDecision;
+    if (!decision) return;
+    const geometry = this.harvestGeometry;
+    const add = (map, key) => map.set(key, (map.get(key) ?? 0) + 1);
+    geometry.attempts += 1;
+    if (decision.wouldOverflow) geometry.wouldOverflow += 1;
+    if (decision.reproductionEligibleBeforeHarvest) geometry.reproductionEligible += 1;
+    if (decision.restrained) geometry.restrained += 1;
+    if (decision.partial) {
+      geometry.partialHarvests += 1;
+      geometry.energyRetainedInFood += decision.projectedMealEnergy * decision.remainingFoodAmount / Math.max(1e-9, decision.availableFoodAmount);
+    }
+    add(geometry.byOrigin, decision.origin);
+    add(geometry.byResource, decision.resource);
+  }
+
+  getHarvestGeometryDiagnostics() {
+    const geometry = this.harvestGeometry;
+    return {
+      attempts: geometry.attempts,
+      wouldOverflow: geometry.wouldOverflow,
+      wouldOverflowFraction: geometry.attempts ? Number((geometry.wouldOverflow / geometry.attempts).toFixed(3)) : 0,
+      reproductionEligibleBeforeHarvest: geometry.reproductionEligible,
+      reproductionEligibleFraction: geometry.attempts ? Number((geometry.reproductionEligible / geometry.attempts).toFixed(3)) : 0,
+      restrainedHarvests: geometry.restrained,
+      partialHarvests: geometry.partialHarvests,
+      energyRetainedInFood: Number(geometry.energyRetainedInFood.toFixed(3)),
+      byOrigin: Object.fromEntries(geometry.byOrigin.entries()),
+      byResource: Object.fromEntries(geometry.byResource.entries())
+    };
+  }
+
+  resetOverflowProvenance() {
+    this.overflowProvenance = {
+      total: 0,
+      byPhase: new Map(),
+      byOrigin: new Map(),
+      byResource: new Map(),
+      byOrganism: new Map(),
+      byComponent: new Map(),
+      deathsAfterOverflow: []
+    };
+  }
+
+  recordOverflowProvenance(organism, result) {
+    const discarded = result.energyFlow?.losses?.capacityOverflow ?? 0;
+    if (discarded <= 0) return;
+    const context = result.overflowContext ?? { phase: "unknown", origin: "unknown", resource: null };
+    const group = this.getBondGroups().find((ids) => ids.includes(organism.id)) ?? [organism.id];
+    const componentKey = group.length > 1 ? group.slice().sort((first, second) => first - second).join(":") : `loose:${organism.id}`;
+    const add = (map, key, amount) => map.set(key, (map.get(key) ?? 0) + amount);
+    this.overflowProvenance.total += discarded;
+    add(this.overflowProvenance.byPhase, context.phase, discarded);
+    add(this.overflowProvenance.byOrigin, context.origin, discarded);
+    add(this.overflowProvenance.byResource, context.resource ?? "none", discarded);
+    const organismRecord = this.overflowProvenance.byOrganism.get(organism.id) ?? {
+      organismId: organism.id,
+      lineageId: organism.lineageId,
+      generation: organism.generation,
+      total: 0,
+      events: 0,
+      phase: context.phase,
+      origin: context.origin
+    };
+    organismRecord.total += discarded;
+    organismRecord.events += 1;
+    this.overflowProvenance.byOrganism.set(organism.id, organismRecord);
+    const componentRecord = this.overflowProvenance.byComponent.get(componentKey) ?? {
+      componentKey,
+      memberCount: group.length,
+      total: 0,
+      events: 0,
+      origin: context.origin
+    };
+    componentRecord.total += discarded;
+    componentRecord.events += 1;
+    componentRecord.memberCount = Math.max(componentRecord.memberCount, group.length);
+    this.overflowProvenance.byComponent.set(componentKey, componentRecord);
+  }
+
+  getOverflowProvenanceDiagnostics() {
+    const provenance = this.overflowProvenance;
+    const roundedEntries = (map) => Object.fromEntries([...map.entries()].map(([key, value]) => [key, Number(value.toFixed(3))]));
+    const ranked = (map) => [...map.values()]
+      .sort((first, second) => second.total - first.total)
+      .map((record) => ({ ...record, total: Number(record.total.toFixed(3)) }));
+    const topTenPercentShare = (records) => {
+      if (!records.length || provenance.total <= 0) return 0;
+      const count = Math.max(1, Math.ceil(records.length * 0.1));
+      return Number((records.slice(0, count).reduce((sum, record) => sum + record.total, 0) / provenance.total).toFixed(3));
+    };
+    const organisms = ranked(provenance.byOrganism);
+    const components = ranked(provenance.byComponent);
+    return {
+      totalDiscarded: Number(provenance.total.toFixed(3)),
+      byPhase: roundedEntries(provenance.byPhase),
+      byOrigin: roundedEntries(provenance.byOrigin),
+      byResource: roundedEntries(provenance.byResource),
+      topTenPercentOrganismShare: topTenPercentShare(organisms),
+      topTenPercentComponentShare: topTenPercentShare(components),
+      topOrganisms: organisms.slice(0, 20),
+      topComponents: components.slice(0, 20),
+      deathsAfterOverflow: provenance.deathsAfterOverflow.slice(-50)
+    };
+  }
+
+  recordEnergyDeath(organism, residueEnergy = 0) {
+    const reason = organism.deathReason ?? "unknown";
+    this.energyEconomics.deaths[reason] = (this.energyEconomics.deaths[reason] ?? 0) + 1;
+    const storedEnergy = Math.max(0, organism.energy - residueEnergy);
+    organism.energyLedger.losses.deathStoredEnergy += storedEnergy;
+    this.energyEconomics.losses.deathStoredEnergy += storedEnergy;
+    const overflow = this.overflowProvenance.byOrganism.get(organism.id)?.total ?? 0;
+    this.overflowProvenance.deathsAfterOverflow.push({
+      tick: this.simulationTicks,
+      organismId: organism.id,
+      lineageId: organism.lineageId,
+      reason,
+      priorOverflow: Number(overflow.toFixed(3))
+    });
+    if (this.overflowProvenance.deathsAfterOverflow.length > 1000) this.overflowProvenance.deathsAfterOverflow.shift();
+  }
+
+  energyEconomicsSnapshot() {
+    const roundGroups = (groups) => Object.fromEntries(Object.entries(groups).map(([key, value]) => [key, Number(value.toFixed(3))]));
+    const foodUnits = this.world.countTilesByType(TILE_TYPES.FOOD);
+    const potentialFoodEnergy = foodUnits * this.config.organism.foodEnergy;
+    const totalIncome = Object.values(this.energyEconomics.income).reduce((total, value) => total + value, 0);
+    const totalExpenses = Object.values(this.energyEconomics.expenses).reduce((total, value) => total + value, 0);
+    const totalLosses = Object.values(this.energyEconomics.losses).reduce((total, value) => total + value, 0);
+    return {
+      intervalTicks: this.config.energeticEconomics.intervalTicks,
+      income: roundGroups(this.energyEconomics.income),
+      expenses: roundGroups(this.energyEconomics.expenses),
+      allocations: roundGroups(this.energyEconomics.allocations),
+      totalIncome: Number(totalIncome.toFixed(3)),
+      totalExpenses: Number(totalExpenses.toFixed(3)),
+      losses: roundGroups(this.energyEconomics.losses),
+      totalLosses: Number(totalLosses.toFixed(3)),
+      currentFoodUnits: foodUnits,
+      unharvestedPotentialEnergy: Number(potentialFoodEnergy.toFixed(3)),
+      deathCauses: { ...this.energyEconomics.deaths },
+      intervals: this.energyEconomics.intervals
+    };
+  }
+
+  captureEnergyEconomicsInterval() {
+    const intervalTicks = this.config.energeticEconomics.intervalTicks;
+    if (this.simulationTicks === 0 || this.simulationTicks % intervalTicks !== 0) return;
+    const snapshot = this.energyEconomicsSnapshot();
+    const delta = (current, previous) => Object.fromEntries(Object.entries(current).map(([key, value]) => [key, Number((value - (previous[key] ?? 0)).toFixed(3))]));
+    const checkpoint = this.energyEconomics.checkpoint;
+    this.energyEconomics.intervals.push({
+      tick: this.simulationTicks,
+      income: delta(snapshot.income, checkpoint.income),
+      expenses: delta(snapshot.expenses, checkpoint.expenses),
+      losses: delta(snapshot.losses, checkpoint.losses),
+      allocations: delta(snapshot.allocations, checkpoint.allocations),
+      population: this.organisms.length,
+      unharvestedPotentialEnergy: snapshot.unharvestedPotentialEnergy,
+      deathCauses: delta(snapshot.deathCauses, checkpoint.deaths)
+    });
+    this.energyEconomics.checkpoint = { income: snapshot.income, expenses: snapshot.expenses, losses: snapshot.losses, allocations: snapshot.allocations, deaths: snapshot.deathCauses };
+    const maximum = this.config.energeticEconomics.maximumIntervals;
+    if (this.energyEconomics.intervals.length > maximum) this.energyEconomics.intervals.shift();
+  }
+
+  resetEnergyLogistics() {
+    this.energyLogistics = { timeSeries: [], checkpoint: null };
+    this.lineageBirthTicks = new Map();
+    this.completedLineageLongevities = [];
+  }
+
+  getEnergyDistribution() {
+    const values = this.organisms.map((organism) => organism.energy).sort((first, second) => first - second);
+    if (!values.length) return { minimum: 0, maximum: 0, mean: 0, median: 0, standardDeviation: 0, gini: 0 };
+    const meanEnergy = values.reduce((total, value) => total + value, 0) / values.length;
+    const median = values.length % 2
+      ? values[Math.floor(values.length / 2)]
+      : (values[values.length / 2 - 1] + values[values.length / 2]) / 2;
+    const variance = values.reduce((total, value) => total + (value - meanEnergy) ** 2, 0) / values.length;
+    const totalEnergy = values.reduce((total, value) => total + value, 0);
+    const weightedRankSum = values.reduce((total, value, index) => total + (index + 1) * value, 0);
+    const gini = totalEnergy === 0 ? 0 : (2 * weightedRankSum) / (values.length * totalEnergy) - (values.length + 1) / values.length;
+    return {
+      minimum: Number(values[0].toFixed(3)),
+      maximum: Number(values.at(-1).toFixed(3)),
+      mean: Number(meanEnergy.toFixed(3)),
+      median: Number(median.toFixed(3)),
+      standardDeviation: Number(Math.sqrt(variance).toFixed(3)),
+      gini: Number(gini.toFixed(4))
+    };
+  }
+
+  recordCompletedLineages() {
+    const active = new Set(this.organisms.map((organism) => organism.lineageId));
+    for (const [lineageId, startedAt] of this.lineageBirthTicks) {
+      if (active.has(lineageId)) continue;
+      this.completedLineageLongevities.push(this.simulationTicks - startedAt);
+      this.lineageBirthTicks.delete(lineageId);
+    }
+  }
+
+  captureEnergyLogisticsTick() {
+    this.recordCompletedLineages();
+    const economics = this.energyEconomicsSnapshot();
+    const previous = this.energyLogistics.checkpoint;
+    const delta = (current, prior = {}) => Object.fromEntries(Object.entries(current).map(([key, value]) => [key, Number((value - (prior[key] ?? 0)).toFixed(3))]));
+    const tickIncome = delta(economics.income, previous?.income);
+    const tickExpenses = delta(economics.expenses, previous?.expenses);
+    const tickLosses = delta(economics.losses, previous?.losses);
+    const tickAllocations = delta(economics.allocations, previous?.allocations);
+    const tickDeaths = delta(economics.deathCauses, previous?.deathCauses);
+    const facets = this.getFacets();
+    const bondReserve = [...this.bonds.values()].reduce((total, bond) => total + (bond.reserve ?? 0), 0);
+    const facetReserve = facets.reduce((total, facet) => total + facet.reserve, 0);
+    const organismEnergy = this.organisms.reduce((total, organism) => total + organism.energy, 0);
+    const activeLineageLongevity = [...this.lineageBirthTicks.values()].map((startedAt) => this.simulationTicks - startedAt);
+    const meanLineageLongevity = activeLineageLongevity.length
+      ? average(activeLineageLongevity)
+      : average(this.completedLineageLongevities);
+    const bondReserveMaintenance = tickExpenses.bondReserveMaintenance;
+    const entry = {
+      tick: this.simulationTicks,
+      population: this.organisms.length,
+      births: this.births - (previous?.births ?? 0),
+      deaths: this.deaths - (previous?.deaths ?? 0),
+      starvationDeaths: tickDeaths["energy exhaustion"] ?? 0,
+      ageDeaths: tickDeaths["maximum age"] ?? 0,
+      totalEcosystemEnergy: Number((organismEnergy + bondReserve + facetReserve).toFixed(3)),
+      energyStored: Number(organismEnergy.toFixed(3)),
+      energyLockedInsideBonds: Number(bondReserve.toFixed(3)),
+      energyHeldInFacetReserves: Number(facetReserve.toFixed(3)),
+      energyHarvested: Number((tickIncome.food + tickIncome.gateWork).toFixed(3)),
+      energyHarvestedFromGates: tickIncome.gateWork,
+      energyDiscarded: tickLosses.capacityOverflow,
+      energySpentOnMovement: tickExpenses.movement,
+      energySpentOnSignaling: tickExpenses.signals,
+      energySpentOnGateWork: tickExpenses.gateWork,
+      energySpentMaintainingBonds: Number((tickExpenses.bonds + bondReserveMaintenance).toFixed(3)),
+      energyInvestedIntoReproduction: tickAllocations.reproduction,
+      bonds: this.bonds.size,
+      facets: facets.length,
+      gateCompletions: this.collectiveWorkCompletions,
+      structuralBirths: this.structuralBirths,
+      averageStructuralMaintenanceCost: Number(((tickExpenses.bonds + bondReserveMaintenance) / Math.max(1, this.bonds.size)).toFixed(3)),
+      averageEnergyHeldPerFacet: Number((facetReserve / Math.max(1, facets.length)).toFixed(3)),
+      averageReserveTurnover: Number(((bondReserveMaintenance + (this.bondEnergyFed - (previous?.bondEnergyFed ?? 0)) + (this.bondSupportEnergyReleased - (previous?.bondSupportEnergyReleased ?? 0))) / Math.max(1, bondReserve)).toFixed(4)),
+      lineageLongevity: Number(meanLineageLongevity.toFixed(3)),
+      energyDistribution: this.getEnergyDistribution()
+    };
+    this.energyLogistics.timeSeries.push(entry);
+    if (this.energyLogistics.timeSeries.length > this.config.energeticEconomics.maximumTimeSeriesTicks) this.energyLogistics.timeSeries.shift();
+    this.energyLogistics.checkpoint = {
+      income: economics.income, expenses: economics.expenses, losses: economics.losses,
+      allocations: economics.allocations, deathCauses: economics.deathCauses, births: this.births, deaths: this.deaths,
+      bondEnergyFed: this.bondEnergyFed, bondSupportEnergyReleased: this.bondSupportEnergyReleased
+    };
   }
 
   updateMarkers() {
@@ -434,6 +1090,8 @@ export class Simulation {
     this.simulationTicks = 0;
     this.births = 0;
     this.deaths = 0;
+    this.resetEnergyEconomics();
+    this.resetEnergyLogistics();
     this.birthMarkers = [];
     this.deathMarkers = [];
     this.bonds.clear();
@@ -451,13 +1109,31 @@ export class Simulation {
     this.refineryConversions = 0;
     this.refineryFoodReleased = 0;
     this.refineryNutrientsProduced = 0;
+    this.deathResidueCreated = 0;
+    this.deathResidueRecovered = 0;
+    this.overflowPlumeCreated = 0;
+    this.overflowPlumeCondensed = 0;
+    this.overflowPlumeFoodReleased = 0;
     this.collectiveWorkCompletions = 0;
     this.collectiveWorkFoodReleased = 0;
     this.collectiveWorkAttendances = 0;
     this.collectiveWorkFieldHarvests = 0;
     this.collectiveWorkFieldHarvestsByWorkers = 0;
     this.collectiveWorkFieldHarvestsByOthers = 0;
+    this.gateFacetAssignments.clear();
+    this.collectiveGateNavigationMoves = 0;
+    this.collectivePlumeNavigationMoves = 0;
+    this.collectiveGateArrivals = 0;
+    this.componentLifecycle.clear();
+    this.componentLifecycleDeferrals = 0;
+    this.componentLifecycleMigrations = 0;
     this.collectiveWorkHarvestLineages.clear();
+    this.gateFoodCaptureRecords = [];
+    this.nextGateFoodCaptureId = 1;
+    this.gateFieldCycles = [];
+    this.nextGateFieldCycleId = 1;
+    this.componentEpisodes = [];
+    this.nextComponentEpisodeId = 1;
     this.nextCourierReportId = 1;
     this.courierReportsCreated = 0;
     this.courierHandoffs = 0;
@@ -472,6 +1148,9 @@ export class Simulation {
     this.facetHarvestEnergy = 0;
     this.facetHarvestReserveEnergy = 0;
     this.facetBirths = 0;
+    this.autonomousFacetBirths = 0;
+    this.facetBuddingLedgers.clear();
+    this.autonomousFacetBuddingDenied = { cooldown: 0, componentEnergy: 0, completedCycle: 0 };
     this.facetReserveSpent = 0;
     this.bondsFed = 0;
     this.bondEnergyFed = 0;
@@ -484,6 +1163,21 @@ export class Simulation {
     this.primaryResourceUnits = 0;
     this.primaryPotentialEnergy = 0;
     this.latestPrimaryProduction = 0;
+    this.environmentMemoryWrites = 0;
+    this.environmentMemoryDeposited = 0;
+    this.environmentMemoryEnergySpent = 0;
+    this.environmentMemoryLineages.clear();
+    this.structuralOverflowCaptured = 0;
+    this.structuralOverflowCapturedByMode = { bond: 0, facet: 0 };
+    this.overflowRoutingRecords = [];
+    this.resetOverflowProvenance();
+    this.satietyMigrationDeferrals = 0;
+    this.resetHarvestGeometry();
+    this.starvationDiagnostics = [];
+    this.bondRelayTransfers = 0;
+    this.bondRelayEnergyWithdrawn = 0;
+    this.bondRelayEnergyDelivered = 0;
+    this.bondRelayRescues = 0;
     this.initializeWorkGates();
     this.snapshotVersion += 1;
     this.seedInitialPopulation(this.config.organism.initialPopulation);
@@ -575,6 +1269,31 @@ export class Simulation {
     if (this.getActiveCollectiveWorkFields().some((field) => this.distanceToGate(organism, field) <= field.radius)) return "gate-field";
     if (!this.config.refinery.enabled) return null;
     return (this.facetCatalysts.get(facet.key) ?? 0) > 0 ? "material" : "catalyst";
+  }
+
+  recordEnvironmentMemoryWrite(organism, write) {
+    if (write.requested <= 0) return;
+    this.environmentMemoryWrites += 1;
+    this.environmentMemoryDeposited += write.deposited;
+    this.environmentMemoryEnergySpent += write.paidCost;
+    const lineage = this.environmentMemoryLineages.get(organism.lineageId) ?? {
+      lineageId: organism.lineageId, writes: 0, deposited: 0, energySpent: 0, readTicks: 0
+    };
+    lineage.writes += 1;
+    lineage.deposited += write.deposited;
+    lineage.energySpent += write.paidCost;
+    this.environmentMemoryLineages.set(organism.lineageId, lineage);
+  }
+
+  recordEnvironmentMemoryReads() {
+    for (const organism of this.organisms) {
+      if (!organism.alive || !organism.genomeProfile.traits.canReadEnvironment) continue;
+      const lineage = this.environmentMemoryLineages.get(organism.lineageId) ?? {
+        lineageId: organism.lineageId, writes: 0, deposited: 0, energySpent: 0, readTicks: 0
+      };
+      lineage.readTicks += 1;
+      this.environmentMemoryLineages.set(organism.lineageId, lineage);
+    }
   }
 
   recordFacetWorkTrail() {
@@ -743,6 +1462,12 @@ export class Simulation {
         cooldown: 0,
         fieldStrength: 0,
         productionBudget: 0,
+        energyStock: this.config.collectiveWork.gateEnergyStock,
+        energyReleased: 0,
+        fieldStartedTick: null,
+        lastFieldLifetime: null,
+        activeCycleId: null,
+        exhausted: false,
         fieldFacetKey: null,
         fieldPorts: null,
         nextPortIndex: 0
@@ -782,10 +1507,37 @@ export class Simulation {
   }
 
   releaseCollectiveWorkFood(gate, requested = 1) {
-    if (this.config.collectiveWork.gateOutputMode === "port-coupled") {
-      return this.releasePortCoupledFood(gate, requested);
-    }
-    return this.releaseDiffuseCollectiveWorkFood(gate, requested);
+    if (!Number.isFinite(gate.energyStock)) gate.energyStock = this.config.collectiveWork.gateEnergyStock;
+    if (!Number.isFinite(gate.energyReleased)) gate.energyReleased = 0;
+    if (gate.exhausted || gate.energyStock <= 0) return 0;
+    const units = Math.min(requested, gate.energyStock);
+    const released = this.config.collectiveWork.gateOutputMode === "port-coupled"
+      ? this.releasePortCoupledFood(gate, units)
+      : this.releaseDiffuseCollectiveWorkFood(gate, units);
+    gate.energyStock = Math.max(0, gate.energyStock - released);
+    gate.energyReleased += released;
+    if (gate.energyStock <= 0) this.exhaustGate(gate);
+    return released;
+  }
+
+  exhaustGate(gate) {
+    if (gate.exhausted) return;
+    gate.exhausted = true;
+    this.closeGateFieldCycle(gate, "exhausted");
+    gate.fieldStrength = 0;
+    gate.productionBudget = 0;
+    gate.fieldPorts = null;
+    this.gateFacetAssignments.delete(gate.fieldFacetKey);
+    gate.fieldFacetKey = null;
+    gate.attendingFacetKey = null;
+    gate.targetState = null;
+    gate.progress = 0;
+    gate.phase = "exhausted";
+    gate.phaseTick = 0;
+    gate.lastFieldLifetime = gate.fieldStartedTick === null ? null : this.simulationTicks - gate.fieldStartedTick;
+    gate.fieldStartedTick = null;
+    gate.cooldown = this.config.collectiveWork.gateExhaustionCooldownTicks;
+    this.recordTelemetry("gate-exhausted", `Gate #${gate.id} released its finite energy stock and entered ${gate.cooldown} ticks of dormancy.`);
   }
 
   getGateWorkPorts(gate) {
@@ -804,9 +1556,27 @@ export class Simulation {
   }
 
   setGateFieldPorts(gate, facet) {
-    // The active ports are the three cells physically occupied by the exact facet doing the work.
-    // They remain readable on canvas as green rings, while the gate itself remains fixed in the world.
-    gate.fieldPorts = facet.members.map((member) => ({ x: member.x, y: member.y }));
+    // Production appears beside, never underneath, the working members.  This keeps the energy
+    // physical and harvestable while making a functioning gate legible on the canvas.
+    const occupiedByFacet = new Set(facet.members.map((member) => `${member.x},${member.y}`));
+    const used = new Set();
+    gate.fieldPorts = facet.members.map((member, index) => {
+      const outwardX = Math.sign(member.x - gate.x);
+      const outwardY = Math.sign(member.y - gate.y);
+      const candidates = [...DIRECTIONS].sort((first, second) => {
+        const firstScore = first.x * outwardX + first.y * outwardY;
+        const secondScore = second.x * outwardX + second.y * outwardY;
+        return secondScore - firstScore;
+      });
+      const position = candidates
+        .map((direction) => this.world.wrapPosition(member.x + direction.x, member.y + direction.y))
+        .find((candidate) => this.world.isWalkable(candidate.x, candidate.y)
+          && !occupiedByFacet.has(`${candidate.x},${candidate.y}`)
+          && !used.has(`${candidate.x},${candidate.y}`));
+      const port = position ?? this.world.wrapPosition(member.x + 1, member.y);
+      used.add(`${port.x},${port.y}`);
+      return { ...port, index };
+    });
   }
 
   releasePortCoupledFood(gate, requested = 1) {
@@ -819,7 +1589,12 @@ export class Simulation {
       if (tile.type !== TILE_TYPES.EMPTY || this.world.isBurning(port.x, port.y)) continue;
       tile.type = TILE_TYPES.FOOD;
       tile.resource = [RESOURCE_TYPES.GREEN, RESOURCE_TYPES.BLUE, RESOURCE_TYPES.RED][port.index % 3];
-      tile.foodOrigin = { type: "gate-field", mode: "port-coupled", gateId: gate.id, facetKey: gate.fieldFacetKey ?? null, portIndex: port.index };
+      tile.foodEnergy = 1;
+      const recordId = this.recordGateFoodRelease(gate, port);
+      tile.foodOrigin = {
+        type: "gate-field", mode: "port-coupled", gateId: gate.id, facetKey: gate.fieldFacetKey ?? null, portIndex: port.index,
+        gateFoodRecordId: recordId, releasedTick: this.simulationTicks
+      };
       gate.nextPortIndex = (portIndex + 1) % ports.length;
       released += 1;
     }
@@ -836,7 +1611,12 @@ export class Simulation {
           if (tile.type !== TILE_TYPES.EMPTY || this.world.isBurning(position.x, position.y)) continue;
           tile.type = TILE_TYPES.FOOD;
           tile.resource = [RESOURCE_TYPES.GREEN, RESOURCE_TYPES.BLUE, RESOURCE_TYPES.RED][released % 3];
-          tile.foodOrigin = { type: "gate-field", mode: "diffuse", gateId: gate.id, facetKey: gate.fieldFacetKey ?? null };
+          tile.foodEnergy = 1;
+          const recordId = this.recordGateFoodRelease(gate, position);
+          tile.foodOrigin = {
+            type: "gate-field", mode: "diffuse", gateId: gate.id, facetKey: gate.fieldFacetKey ?? null,
+            gateFoodRecordId: recordId, releasedTick: this.simulationTicks
+          };
           released += 1;
         }
       }
@@ -850,15 +1630,25 @@ export class Simulation {
       if (this.config.collectiveWork.gateOutputMode === "port-coupled") {
         const maintainingFacet = this.getFacetAtWorkGate(gate);
         if (!maintainingFacet || maintainingFacet.key !== gate.fieldFacetKey) {
+          this.closeGateFieldCycle(gate, "facet-lost");
+          this.gateFacetAssignments.delete(gate.fieldFacetKey);
           gate.fieldStrength = 0;
           gate.productionBudget = 0;
           gate.fieldPorts = null;
+          gate.lastFieldLifetime = gate.fieldStartedTick === null ? null : this.simulationTicks - gate.fieldStartedTick;
+          gate.fieldStartedTick = null;
           this.recordTelemetry("gate-field-ended", `Gate #${gate.id} production stopped because facet ${gate.fieldFacetKey ?? "unknown"} left or dissolved.`);
           continue;
         }
-        this.setGateFieldPorts(gate, maintainingFacet);
       }
       gate.fieldStrength = Math.max(0, gate.fieldStrength - this.config.collectiveWork.gateFieldDecay);
+      if (gate.fieldStrength <= 0) {
+        this.closeGateFieldCycle(gate, "field-decayed");
+        this.gateFacetAssignments.delete(gate.fieldFacetKey);
+        gate.fieldFacetKey = null;
+        gate.fieldPorts = null;
+        continue;
+      }
       const productionRate = this.config.collectiveWork.gateOutputMode === "port-coupled"
         ? this.config.collectiveWork.gatePortFoodRate
         : this.config.collectiveWork.gateFieldFoodRate;
@@ -868,8 +1658,335 @@ export class Simulation {
         if (released <= 0) break;
         gate.productionBudget -= 1;
         this.collectiveWorkFoodReleased += released;
+        if (gate.exhausted) break;
       }
     }
+  }
+
+  startGateFieldCycle(gate, facet) {
+    const members = facet.members.map((member) => ({ id: member.id, energy: member.energy }));
+    const memberIds = members.map((member) => member.id);
+    const componentMemberIds = this.getBondGroups().find((group) => group.includes(memberIds[0])) ?? memberIds;
+    const internalReserve = [...this.bonds.values()]
+      .filter((bond) => memberIds.includes(bond.firstId) && memberIds.includes(bond.secondId))
+      .reduce((sum, bond) => sum + (bond.reserve ?? 0), 0);
+    const cycle = {
+      id: this.nextGateFieldCycleId++, gateId: gate.id, facetKey: facet.key,
+      startedTick: this.simulationTicks, endedTick: null, outcome: null,
+      memberStartEnergy: Object.fromEntries(members.map((member) => [member.id, member.energy])),
+      memberLastEnergy: Object.fromEntries(members.map((member) => [member.id, member.energy])),
+      internalReserveStart: internalReserve,
+      facetReserveStart: this.facetReserves.get(facet.key) ?? 0,
+      componentMemberIdsAtStart: [...componentMemberIds],
+      componentEnergyStart: this.getComponentEnergy(componentMemberIds),
+      income: { gateWork: 0, food: 0 }, expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, reserveMaintenance: 0, signals: 0, memory: 0, idle: 0 },
+      allocations: { bondReserve: 0, externalBondReserve: 0, facetSharing: 0, externalFacetSharing: 0, facetCapital: 0 }, losses: { capacityOverflow: 0 },
+      workerGateHarvests: 0, competitorGateHarvests: 0
+    };
+    this.gateFieldCycles.push(cycle);
+    if (this.gateFieldCycles.length > MAX_GATE_CAPTURE_RECORDS) this.gateFieldCycles.shift();
+    gate.activeCycleId = cycle.id;
+    this.resolveComponentEpisodesWithCompletion(facet);
+    this.startComponentEpisode(cycle, componentMemberIds);
+  }
+
+  startComponentEpisode(cycle, componentMemberIds) {
+    this.componentEpisodes.push({
+      id: this.nextComponentEpisodeId++,
+      cycleId: cycle.id,
+      startedTick: this.simulationTicks,
+      fieldEndedTick: null,
+      endedTick: null,
+      outcome: null,
+      originalMemberIds: [...componentMemberIds],
+      startEnergy: this.getComponentEnergy(componentMemberIds),
+      startMemberCount: componentMemberIds.length,
+      endEnergy: null,
+      endMemberCount: null,
+      migration: {
+        income: { food: 0, gateWork: 0, deathResidue: 0 },
+        expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, reserveMaintenance: 0, signals: 0, memory: 0, idle: 0 },
+        transfers: { directSupport: 0, relayReserve: 0, relayedSupport: 0 },
+        losses: { capacityOverflow: 0 }
+      },
+      phaseAccounting: Object.fromEntries(["harvest", "conservation", "migration", "arrival"].map((phase) => [phase, {
+        startedTick: phase === "harvest" ? this.simulationTicks : null,
+        income: { food: 0, gateWork: 0 },
+        expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, signals: 0, memory: 0, idle: 0, reserveMaintenance: 0 },
+        losses: { capacityOverflow: 0 },
+        deferredOrdinaryHarvests: 0,
+        actionRecords: 0
+      }]))
+    });
+    if (this.componentEpisodes.length > MAX_GATE_CAPTURE_RECORDS) this.componentEpisodes.shift();
+  }
+
+  markComponentEpisodeFieldEnded(cycle) {
+    const episode = this.componentEpisodes.find((candidate) => candidate.cycleId === cycle.id && candidate.endedTick === null);
+    if (episode) episode.fieldEndedTick = this.simulationTicks;
+  }
+
+  resolveComponentEpisodesWithCompletion(facet) {
+    const completingGroup = this.getBondGroups().find((group) => group.includes(facet.memberIds[0])) ?? facet.memberIds;
+    for (const episode of this.componentEpisodes) {
+      if (episode.endedTick !== null || episode.fieldEndedTick === null) continue;
+      if (!episode.originalMemberIds.some((id) => completingGroup.includes(id))) continue;
+      episode.endedTick = this.simulationTicks;
+      episode.outcome = "next-gate-completion";
+      episode.endEnergy = this.getComponentEnergy(completingGroup);
+      episode.endMemberCount = completingGroup.length;
+      episode.totalDurationTicks = episode.endedTick - episode.startedTick;
+      episode.migrationTicks = episode.endedTick - episode.fieldEndedTick;
+      episode.componentEnergyDelta = Number((episode.endEnergy - episode.startEnergy).toFixed(3));
+      this.finalizeComponentEpisodeMigration(episode);
+    }
+  }
+
+  updateComponentEpisodes() {
+    for (const episode of this.componentEpisodes) {
+      if (episode.endedTick !== null || episode.fieldEndedTick === null) continue;
+      const survivor = episode.originalMemberIds.find((id) => this.organisms.some((organism) => organism.alive && organism.id === id));
+      if (survivor !== undefined) continue;
+      episode.endedTick = this.simulationTicks;
+      episode.outcome = "original-members-extinct";
+      episode.endEnergy = 0;
+      episode.endMemberCount = 0;
+      episode.totalDurationTicks = episode.endedTick - episode.startedTick;
+      episode.migrationTicks = episode.endedTick - episode.fieldEndedTick;
+      episode.componentEnergyDelta = Number((-episode.startEnergy).toFixed(3));
+      this.finalizeComponentEpisodeMigration(episode);
+    }
+  }
+
+  getComponentEpisodeCurrentMemberIds(episode) {
+    const anchorId = episode.originalMemberIds.find((id) => this.organisms.some((organism) => organism.alive && organism.id === id));
+    if (anchorId === undefined) return [];
+    return this.getBondGroups().find((group) => group.includes(anchorId)) ?? [anchorId];
+  }
+
+  getActiveMigrationEpisodesForMember(memberId) {
+    return this.componentEpisodes.filter((episode) => (
+      episode.fieldEndedTick !== null
+      && episode.endedTick === null
+      && this.getComponentEpisodeCurrentMemberIds(episode).includes(memberId)
+    ));
+  }
+
+  getComponentEpisodePhase(episode, organism) {
+    if (episode.arrivalTick !== null && episode.arrivalTick !== undefined) return "arrival";
+    if (organism.componentLifecycleState === "conserve") return "conservation";
+    if (episode.fieldEndedTick !== null) return "migration";
+    return "harvest";
+  }
+
+  recordComponentEpisodePhaseFlow(organism, result) {
+    for (const episode of this.componentEpisodes) {
+      if (episode.endedTick !== null || !this.getComponentEpisodeCurrentMemberIds(episode).includes(organism.id)) continue;
+      const phase = this.getComponentEpisodePhase(episode, organism);
+      const ledger = episode.phaseAccounting?.[phase];
+      if (!ledger) continue;
+      ledger.startedTick ??= this.simulationTicks;
+      ledger.actionRecords += 1;
+      for (const [key, value] of Object.entries(result.energyFlow?.income ?? {})) {
+        if (Object.hasOwn(ledger.income, key)) ledger.income[key] += value ?? 0;
+      }
+      for (const [key, value] of Object.entries(result.energyFlow?.expenses ?? {})) {
+        if (Object.hasOwn(ledger.expenses, key)) ledger.expenses[key] += value ?? 0;
+      }
+      ledger.losses.capacityOverflow += result.energyFlow?.losses?.capacityOverflow ?? 0;
+      if (result.deferredHarvest) ledger.deferredOrdinaryHarvests += 1;
+    }
+  }
+
+  recordComponentEpisodeGateArrival(members, gate) {
+    for (const episode of this.componentEpisodes) {
+      if (episode.endedTick !== null || episode.fieldEndedTick === null || episode.arrivalTick !== undefined) continue;
+      if (!episode.originalMemberIds.some((id) => members.some((member) => member.id === id))) continue;
+      episode.arrivalTick = this.simulationTicks;
+      episode.arrivalGateId = gate.id;
+      episode.phaseAccounting.arrival.startedTick = this.simulationTicks;
+    }
+  }
+
+  recordComponentEpisodeMigrationFlow(organism, energyFlow) {
+    for (const episode of this.getActiveMigrationEpisodesForMember(organism.id)) {
+      for (const [key, value] of Object.entries(energyFlow.income)) {
+        if (Object.hasOwn(episode.migration.income, key)) episode.migration.income[key] += value ?? 0;
+      }
+      for (const [key, value] of Object.entries(energyFlow.expenses)) {
+        if (Object.hasOwn(episode.migration.expenses, key)) episode.migration.expenses[key] += value ?? 0;
+      }
+      episode.migration.losses.capacityOverflow += energyFlow.losses.capacityOverflow ?? 0;
+    }
+  }
+
+  recordComponentEpisodeMigrationSupport(organism, directSupport, relayReserve, relayedSupport) {
+    for (const episode of this.getActiveMigrationEpisodesForMember(organism.id)) {
+      episode.migration.transfers.directSupport += directSupport;
+      episode.migration.transfers.relayReserve += relayReserve;
+      episode.migration.transfers.relayedSupport += relayedSupport;
+    }
+  }
+
+  recordComponentEpisodeMigrationResidueRecovery(memberIds, amount) {
+    if (amount <= 0) return;
+    for (const episode of this.componentEpisodes) {
+      if (episode.fieldEndedTick === null || episode.endedTick !== null) continue;
+      const currentIds = this.getComponentEpisodeCurrentMemberIds(episode);
+      if (memberIds.some((id) => currentIds.includes(id))) episode.migration.income.deathResidue += amount;
+    }
+  }
+
+  recordComponentEpisodeMigrationReserveMaintenance() {
+    for (const episode of this.componentEpisodes) {
+      if (episode.fieldEndedTick === null || episode.endedTick !== null) continue;
+      const ids = new Set(this.getComponentEpisodeCurrentMemberIds(episode));
+      const internalBondCount = [...this.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId)).length;
+      episode.migration.expenses.reserveMaintenance += internalBondCount * this.config.bond.maintenancePerTick;
+    }
+  }
+
+  recordComponentEpisodePhaseReserveMaintenance() {
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    for (const episode of this.componentEpisodes) {
+      if (episode.endedTick !== null) continue;
+      const memberIds = this.getComponentEpisodeCurrentMemberIds(episode);
+      const representative = memberIds.map((id) => byId.get(id)).find(Boolean);
+      if (!representative) continue;
+      const phase = this.getComponentEpisodePhase(episode, representative);
+      const ledger = episode.phaseAccounting?.[phase];
+      if (!ledger) continue;
+      const ids = new Set(memberIds);
+      const internalBondCount = [...this.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId)).length;
+      ledger.expenses.reserveMaintenance += internalBondCount * this.config.bond.maintenancePerTick;
+    }
+  }
+
+  finalizeComponentEpisodeMigration(episode) {
+    if (episode.budding) {
+      episode.budding.offspringSurviving = episode.budding.childIds
+        .filter((id) => this.organisms.some((organism) => organism.alive && organism.id === id)).length;
+    }
+    episode.migration.totalIncome = Number(Object.values(episode.migration.income).reduce((sum, value) => sum + value, 0).toFixed(3));
+    episode.migration.totalExpenses = Number(Object.values(episode.migration.expenses).reduce((sum, value) => sum + value, 0).toFixed(3));
+    episode.migration.netOperationalBalance = Number((episode.migration.totalIncome - episode.migration.totalExpenses - episode.migration.losses.capacityOverflow).toFixed(3));
+    for (const phase of Object.values(episode.phaseAccounting ?? {})) {
+      phase.totalIncome = Number(Object.values(phase.income).reduce((sum, value) => sum + value, 0).toFixed(3));
+      phase.totalExpenses = Number(Object.values(phase.expenses).reduce((sum, value) => sum + value, 0).toFixed(3));
+      phase.netOperationalBalance = Number((phase.totalIncome - phase.totalExpenses - phase.losses.capacityOverflow).toFixed(3));
+    }
+  }
+
+  recordGateFieldCycleFlow(organism, energyFlow, allocations = {}) {
+    for (const gate of this.workGates) {
+      const cycle = this.gateFieldCycles.find((candidate) => candidate.id === gate.activeCycleId && !candidate.endedTick);
+      if (!cycle || !Object.hasOwn(cycle.memberStartEnergy, organism.id)) continue;
+      cycle.memberLastEnergy[organism.id] = organism.energy;
+      cycle.income.gateWork += energyFlow.income.gateWork ?? 0;
+      cycle.income.food += energyFlow.income.food ?? 0;
+      cycle.expenses.movement += energyFlow.expenses.movement ?? 0;
+      cycle.expenses.maintenance += energyFlow.expenses.maintenance ?? 0;
+      cycle.expenses.perception += energyFlow.expenses.perception ?? 0;
+      cycle.expenses.bonds += energyFlow.expenses.bonds ?? 0;
+      cycle.expenses.signals += energyFlow.expenses.signals ?? 0;
+      cycle.expenses.memory += energyFlow.expenses.memory ?? 0;
+      cycle.expenses.idle += energyFlow.expenses.idle ?? 0;
+      cycle.allocations.bondReserve += allocations.structuralAllocation ?? 0;
+      cycle.allocations.externalBondReserve += allocations.externalBondAllocation ?? 0;
+      cycle.allocations.facetSharing += allocations.facetSharing ?? 0;
+      cycle.allocations.externalFacetSharing += allocations.externalFacetSharing ?? 0;
+      cycle.allocations.facetCapital += allocations.facetCapital ?? 0;
+      cycle.losses.capacityOverflow += energyFlow.losses.capacityOverflow ?? 0;
+    }
+  }
+
+  recordGateCycleReserveMaintenance() {
+    for (const gate of this.workGates) {
+      const cycle = this.gateFieldCycles.find((candidate) => candidate.id === gate.activeCycleId && !candidate.endedTick);
+      if (!cycle) continue;
+      const ids = Object.keys(cycle.memberStartEnergy).map(Number);
+      const internalBonds = [...this.bonds.values()].filter((bond) => ids.includes(bond.firstId) && ids.includes(bond.secondId));
+      cycle.expenses.reserveMaintenance += internalBonds.length * this.config.bond.maintenancePerTick;
+    }
+  }
+
+  closeGateFieldCycle(gate, outcome) {
+    const cycle = this.gateFieldCycles.find((candidate) => candidate.id === gate.activeCycleId && !candidate.endedTick);
+    if (!cycle) return;
+    cycle.endedTick = this.simulationTicks;
+    cycle.outcome = outcome;
+    cycle.durationTicks = cycle.endedTick - cycle.startedTick;
+    cycle.memberEnergyDelta = Number(Object.keys(cycle.memberStartEnergy).reduce((sum, id) => sum + ((cycle.memberLastEnergy[id] ?? 0) - cycle.memberStartEnergy[id]), 0).toFixed(3));
+    const memberIds = Object.keys(cycle.memberStartEnergy).map(Number);
+    const internalReserveEnd = [...this.bonds.values()]
+      .filter((bond) => memberIds.includes(bond.firstId) && memberIds.includes(bond.secondId))
+      .reduce((sum, bond) => sum + (bond.reserve ?? 0), 0);
+    const facetReserveEnd = this.facetReserves.get(cycle.facetKey) ?? 0;
+    cycle.internalReserveDelta = Number((internalReserveEnd - cycle.internalReserveStart).toFixed(3));
+    cycle.facetReserveDelta = Number((facetReserveEnd - cycle.facetReserveStart).toFixed(3));
+    cycle.totalStructuralEnergyDelta = Number((cycle.memberEnergyDelta + cycle.internalReserveDelta + cycle.facetReserveDelta).toFixed(3));
+    cycle.gateIncome = Number(cycle.income.gateWork.toFixed(3));
+    cycle.totalActionCosts = Number(Object.values(cycle.expenses).reduce((sum, value) => sum + value, 0).toFixed(3));
+    cycle.netGateBalance = Number((cycle.gateIncome - cycle.totalActionCosts).toFixed(3));
+    cycle.capacityOverflow = Number(cycle.losses.capacityOverflow.toFixed(3));
+    cycle.bondReserveAllocation = Number(cycle.allocations.bondReserve.toFixed(3));
+    cycle.externalBondReserveAllocation = Number(cycle.allocations.externalBondReserve.toFixed(3));
+    cycle.facetSharingAllocation = Number(cycle.allocations.facetSharing.toFixed(3));
+    cycle.externalFacetSharingAllocation = Number(cycle.allocations.externalFacetSharing.toFixed(3));
+    cycle.facetCapitalGenerated = Number(cycle.allocations.facetCapital.toFixed(3));
+    const anchorId = cycle.componentMemberIdsAtStart.find((id) => this.organisms.some((organism) => organism.alive && organism.id === id));
+    const componentMemberIdsAtEnd = anchorId === undefined
+      ? []
+      : (this.getBondGroups().find((group) => group.includes(anchorId)) ?? [anchorId]);
+    cycle.componentMemberCountStart = cycle.componentMemberIdsAtStart.length;
+    cycle.componentMemberCountEnd = componentMemberIdsAtEnd.length;
+    cycle.componentEnergyEnd = this.getComponentEnergy(componentMemberIdsAtEnd);
+    cycle.componentEnergyDelta = Number((cycle.componentEnergyEnd - cycle.componentEnergyStart).toFixed(3));
+    this.markComponentEpisodeFieldEnded(cycle);
+    gate.activeCycleId = null;
+  }
+
+  getComponentEnergy(memberIds) {
+    if (!memberIds.length) return 0;
+    const ids = new Set(memberIds);
+    const organismEnergy = this.organisms.filter((organism) => organism.alive && ids.has(organism.id)).reduce((sum, organism) => sum + organism.energy, 0);
+    const bondReserve = [...this.bonds.values()]
+      .filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId))
+      .reduce((sum, bond) => sum + (bond.reserve ?? 0), 0);
+    const facetReserve = this.getFacets()
+      .filter((facet) => facet.memberIds.every((id) => ids.has(id)))
+      .reduce((sum, facet) => sum + facet.reserve, 0);
+    return organismEnergy + bondReserve + facetReserve;
+  }
+
+  recordGateFoodRelease(gate, port) {
+    const facet = this.getFacets().find((candidate) => candidate.key === gate.fieldFacetKey);
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const responsibleMembers = (facet?.memberIds ?? []).map((id) => byId.get(id)).filter(Boolean)
+      .map((member) => ({ id: member.id, x: member.x, y: member.y }));
+    const cycle = this.gateFieldCycles.find((candidate) => candidate.id === gate.activeCycleId && !candidate.endedTick);
+    const record = {
+      id: this.nextGateFoodCaptureId++,
+      gateId: gate.id,
+      facetKey: gate.fieldFacetKey ?? null,
+      releasedTick: this.simulationTicks,
+      port: { x: port.x, y: port.y },
+      gateStockBeforeRelease: gate.energyStock,
+      responsibleMembers,
+      responsibleComponentMemberIds: cycle?.componentMemberIdsAtStart ?? [],
+      harvest: null
+    };
+    this.gateFoodCaptureRecords.push(record);
+    if (this.gateFoodCaptureRecords.length > MAX_GATE_CAPTURE_RECORDS) this.gateFoodCaptureRecords.shift();
+    return record.id;
+  }
+
+  distanceBetweenPositions(first, second) {
+    const xDistance = Math.abs(first.x - second.x);
+    const yDistance = Math.abs(first.y - second.y);
+    const wrappedX = this.world.wraps ? Math.min(xDistance, this.world.width - xDistance) : xDistance;
+    const wrappedY = this.world.wraps ? Math.min(yDistance, this.world.height - yDistance) : yDistance;
+    return Math.max(wrappedX, wrappedY);
   }
 
   recordCollectiveWorkHarvest(organism, origin) {
@@ -892,6 +2009,81 @@ export class Simulation {
     lineage.latestGeneration = Math.max(lineage.latestGeneration, organism.generation);
     this.collectiveWorkHarvestLineages.set(organism.lineageId, lineage);
     this.recordTelemetry("gate-field-harvest", `Lineage ${organism.lineageId}, organism #${organism.id} (generation ${organism.generation}) harvested gate #${origin.gateId} food as ${workerHarvest ? "responsible facet member" : "local competitor"}.`);
+    const record = this.gateFoodCaptureRecords.find((item) => item.id === origin.gateFoodRecordId);
+    if (record) {
+      const distances = record.responsibleMembers.map((member) => this.distanceBetweenPositions(organism, member));
+      record.harvest = {
+        tick: this.simulationTicks,
+        organismId: organism.id,
+        lineageId: organism.lineageId,
+        responsibleMemberAtRelease: record.responsibleMembers.some((member) => member.id === organism.id),
+        responsibleFacetAtHarvest: workerHarvest,
+        responsibleComponentMemberAtRelease: record.responsibleComponentMemberIds.includes(organism.id),
+        delayTicks: this.simulationTicks - record.releasedTick,
+        distanceFromResponsibleMember: distances.length ? Math.min(...distances) : null,
+        gateStockAtHarvest: this.workGates.find((gate) => gate.id === origin.gateId)?.energyStock ?? null
+      };
+    }
+    const activeCycle = this.gateFieldCycles.find((cycle) => cycle.id === this.workGates.find((gate) => gate.id === origin.gateId)?.activeCycleId);
+    if (activeCycle) {
+      if (record?.responsibleMembers.some((member) => member.id === organism.id)) activeCycle.workerGateHarvests += 1;
+      else activeCycle.competitorGateHarvests += 1;
+    }
+  }
+
+  getGateFieldCycleDiagnostics() {
+    const completed = this.gateFieldCycles.filter((cycle) => cycle.endedTick !== null);
+    const mean = (values) => values.length ? Number(average(values).toFixed(3)) : 0;
+    return {
+      completedCycles: completed.length,
+      meanDurationTicks: mean(completed.map((cycle) => cycle.durationTicks)),
+      meanGateIncome: mean(completed.map((cycle) => cycle.gateIncome)),
+      meanActionCosts: mean(completed.map((cycle) => cycle.totalActionCosts)),
+      meanNetGateBalance: mean(completed.map((cycle) => cycle.netGateBalance)),
+      meanMemberEnergyDelta: mean(completed.map((cycle) => cycle.memberEnergyDelta)),
+      meanTotalStructuralEnergyDelta: mean(completed.map((cycle) => cycle.totalStructuralEnergyDelta)),
+      meanComponentEnergyDelta: mean(completed.map((cycle) => cycle.componentEnergyDelta)),
+      meanComponentSizeStart: mean(completed.map((cycle) => cycle.componentMemberCountStart)),
+      meanComponentSizeEnd: mean(completed.map((cycle) => cycle.componentMemberCountEnd)),
+      meanCapacityOverflow: mean(completed.map((cycle) => cycle.capacityOverflow)),
+      meanBondReserveAllocation: mean(completed.map((cycle) => cycle.bondReserveAllocation)),
+      meanExternalBondReserveAllocation: mean(completed.map((cycle) => cycle.externalBondReserveAllocation)),
+      meanFacetSharingAllocation: mean(completed.map((cycle) => cycle.facetSharingAllocation)),
+      meanExternalFacetSharingAllocation: mean(completed.map((cycle) => cycle.externalFacetSharingAllocation)),
+      meanFacetCapitalGenerated: mean(completed.map((cycle) => cycle.facetCapitalGenerated)),
+      positiveNetGateBalanceFraction: completed.length ? Number((completed.filter((cycle) => cycle.netGateBalance > 0).length / completed.length).toFixed(3)) : 0,
+      outcomes: Object.fromEntries(Object.entries(Object.groupBy(completed, (cycle) => cycle.outcome)).map(([outcome, cycles]) => [outcome, cycles.length])),
+      recentCompletedCycles: completed.slice(-20)
+    };
+  }
+
+  getComponentEpisodeDiagnostics() {
+    const completed = this.componentEpisodes.filter((episode) => episode.endedTick !== null);
+    const mean = (values) => values.length ? Number(average(values).toFixed(3)) : 0;
+    const nextCompletions = completed.filter((episode) => episode.outcome === "next-gate-completion");
+    const phaseDiagnostics = Object.fromEntries(["harvest", "conservation", "migration", "arrival"].map((phase) => {
+      const records = nextCompletions.map((episode) => episode.phaseAccounting?.[phase]).filter(Boolean);
+      return [phase, {
+        episodesObserved: records.filter((record) => record.actionRecords > 0).length,
+        meanIncome: mean(records.map((record) => record.totalIncome ?? 0)),
+        meanExpenses: mean(records.map((record) => record.totalExpenses ?? 0)),
+        meanOverflow: mean(records.map((record) => record.losses.capacityOverflow ?? 0)),
+        meanNetOperationalBalance: mean(records.map((record) => record.netOperationalBalance ?? 0)),
+        meanDeferredOrdinaryHarvests: mean(records.map((record) => record.deferredOrdinaryHarvests ?? 0)),
+        meanActionRecords: mean(records.map((record) => record.actionRecords ?? 0))
+      }];
+    }));
+    return {
+      completedEpisodes: completed.length,
+      nextGateCompletions: nextCompletions.length,
+      originalMemberExtinctions: completed.filter((episode) => episode.outcome === "original-members-extinct").length,
+      censoredActiveEpisodes: this.componentEpisodes.filter((episode) => episode.endedTick === null).length,
+      meanWholeEpisodeEnergyDelta: mean(nextCompletions.map((episode) => episode.componentEnergyDelta)),
+      positiveWholeEpisodeFraction: nextCompletions.length ? Number((nextCompletions.filter((episode) => episode.componentEnergyDelta > 0).length / nextCompletions.length).toFixed(3)) : 0,
+      meanMigrationTicks: mean(nextCompletions.map((episode) => episode.migrationTicks)),
+      phaseDiagnostics,
+      recentCompletedEpisodes: completed.slice(-20)
+    };
   }
 
   updateCollectiveWork() {
@@ -901,11 +2093,20 @@ export class Simulation {
       if (gate.cooldown > 0) {
         gate.cooldown -= 1;
         if (gate.cooldown === 0) {
+          if (gate.exhausted) {
+            gate.exhausted = false;
+            gate.energyStock = this.config.collectiveWork.gateEnergyStock;
+            gate.energyReleased = 0;
+            this.recordTelemetry("gate-recharged", `Gate #${gate.id} restored its finite energy stock and is available again.`);
+          }
           gate.phase = "observe";
           gate.phaseTick = 0;
         }
         continue;
       }
+      // A live production field is already the gate's active result. It cannot be repeatedly
+      // re-solved to refresh its strength; only continued structural maintenance keeps it alive.
+      if (gate.fieldStrength > 0) continue;
       gate.phaseTick += 1;
       const facet = this.getFacetAtWorkGate(gate);
       if (gate.phase === "observe") {
@@ -914,7 +2115,10 @@ export class Simulation {
         gate.phaseTick = 0;
         gate.progress = 0;
         gate.attendingFacetKey = facet?.key ?? null;
-        if (facet) this.collectiveWorkAttendances += 1;
+        if (facet) {
+          this.collectiveWorkAttendances += 1;
+          this.gateFacetAssignments.set(facet.key, gate.id);
+        }
         gate.targetState = facet
           ? average(facet.members.map((member) => member.getPersistentState() ?? 0))
           : null;
@@ -933,6 +2137,8 @@ export class Simulation {
         this.collectiveWorkCompletions += 1;
         gate.fieldStrength = this.config.collectiveWork.gateFieldMaximum;
         gate.productionBudget = 0;
+        gate.fieldStartedTick = this.simulationTicks;
+        this.startGateFieldCycle(gate, facet);
         gate.fieldFacetKey = facet.key;
         this.setGateFieldPorts(gate, facet);
         gate.nextPortIndex = 0;
@@ -940,7 +2146,10 @@ export class Simulation {
         // This is not energy transfer: the unit remains physical, contestable food. It prevents a
         // newly successful facet from having to survive an additional tick before its field can begin.
         if (this.config.collectiveWork.gateOutputMode === "port-coupled") {
-          this.collectiveWorkFoodReleased += this.releasePortCoupledFood(gate, 1);
+          this.collectiveWorkFoodReleased += this.releasePortCoupledFood(
+            gate,
+            this.config.collectiveWork.gateStartupFoodUnits
+          );
         }
         this.recordTelemetry("consensus-gate", `Facet ${facet.key} completed consensus gate #${gate.id}; its ${this.config.collectiveWork.gateOutputMode === "port-coupled" ? "three work-port" : "local production"} field is active.`);
         gate.cooldown = 0;
@@ -950,6 +2159,7 @@ export class Simulation {
         gate.targetState = null;
         gate.attendingFacetKey = null;
       } else if (gate.phaseTick >= this.config.collectiveWork.responseTicks) {
+        if (gate.attendingFacetKey) this.gateFacetAssignments.delete(gate.attendingFacetKey);
         gate.phase = "observe";
         gate.phaseTick = 0;
         gate.progress = 0;
@@ -1037,6 +2247,44 @@ export class Simulation {
     const stored = Math.min(this.config.refinery.catalystCapacity, (this.facetCatalysts.get(facet.key) ?? 0) + 1);
     this.facetCatalysts.set(facet.key, stored);
     this.recordTelemetry("red-catalyst", `Facet ${facet.key} retained red catalyst ${stored}/${this.config.refinery.catalystCapacity}.`);
+  }
+
+  recoverDeathResidue() {
+    const chemistry = this.config.chemistry;
+    if (!chemistry.deathResidueEnabled) return;
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    for (const facet of this.getFacets()) {
+      if (this.getFacetStrength(facet.memberIds) < this.config.facet.minimumBondStrength) continue;
+      const members = facet.memberIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== 3) continue;
+      const candidates = [];
+      for (const member of members) {
+        for (let dy = -chemistry.deathResidueSenseRadius; dy <= chemistry.deathResidueSenseRadius; dy += 1) {
+          for (let dx = -chemistry.deathResidueSenseRadius; dx <= chemistry.deathResidueSenseRadius; dx += 1) {
+            const position = this.world.wrapPosition(member.x + dx, member.y + dy);
+            const value = this.world.deathResidue[position.y][position.x];
+            if (value > 0) candidates.push({ ...position, value });
+          }
+        }
+      }
+      const residue = candidates.sort((first, second) => second.value - first.value)[0];
+      if (!residue) continue;
+      const taken = this.world.takeDeathResidue(residue.x, residue.y, chemistry.deathResidueRecoveryRate);
+      const recovered = taken * chemistry.deathResidueRecoveryEfficiency;
+      if (recovered <= 0) continue;
+      let remaining = recovered;
+      for (const member of [...members].sort((first, second) => first.energy - second.energy)) {
+        const capacity = this.config.organism.reproductionThreshold * 1.8 * (member.genomeProfile.powers[3] ?? 1);
+        const granted = Math.min(remaining, Math.max(0, capacity - member.energy));
+        member.energy += granted;
+        member.energyLedger.income.deathResidue = (member.energyLedger.income.deathResidue ?? 0) + granted;
+        this.energyEconomics.income.deathResidue = (this.energyEconomics.income.deathResidue ?? 0) + granted;
+        remaining -= granted;
+        if (remaining <= 0) break;
+      }
+      this.deathResidueRecovered += recovered - remaining;
+      this.recordComponentEpisodeMigrationResidueRecovery(members.map((member) => member.id), recovered - remaining);
+    }
   }
 
   updateFacetRefineries() {
@@ -1137,13 +2385,13 @@ export class Simulation {
     return average(strengths);
   }
 
-  shareFacetEnergy(eater, mealEnergy) {
+  shareFacetEnergy(eater, mealEnergy, priorityMemberIds = null) {
     const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
     const eligibleFacets = this.getFacets()
       .filter((facet) => facet.memberIds.includes(eater.id))
       .map((facet) => ({ ...facet, strength: this.getFacetStrength(facet.memberIds) }))
       .filter((facet) => facet.strength >= this.config.facet.minimumBondStrength);
-    if (!eligibleFacets.length) return;
+    if (!eligibleFacets.length) return { total: 0, external: 0 };
 
     const recipients = new Map();
     for (const facet of eligibleFacets) {
@@ -1155,20 +2403,30 @@ export class Simulation {
         }
       }
     }
-    if (!recipients.size) return;
+    if (!recipients.size) return { total: 0, external: 0 };
 
     const averageStrength = average([...recipients.values()].map((recipient) => recipient.strength));
     const pool = Math.min(eater.energy, mealEnergy * this.config.facet.sharingFraction * averageStrength);
-    if (pool <= 0) return;
+    if (pool <= 0) return { total: 0, external: 0 };
 
     const orderedRecipients = [...recipients.values()].sort((first, second) => first.organism.energy - second.organism.energy);
-    const share = pool / orderedRecipients.length;
-    const transfers = orderedRecipients.map((recipient) => {
+    const preferred = priorityMemberIds ? orderedRecipients.filter((recipient) => priorityMemberIds.has(recipient.organism.id)) : [];
+    const ordered = priorityMemberIds ? [...preferred, ...orderedRecipients.filter((recipient) => !priorityMemberIds.has(recipient.organism.id))] : orderedRecipients;
+    let remaining = pool;
+    const transfers = [];
+    for (let index = 0; index < ordered.length && remaining > 0; index += 1) {
+      const recipient = ordered[index];
+      const recipientsRemaining = priorityMemberIds && index < preferred.length
+        ? preferred.length - index
+        : ordered.length - index;
       const maximumEnergy = this.config.organism.reproductionThreshold * 1.8 * (recipient.organism.genomeProfile.powers[3] ?? 1);
-      return { ...recipient, transferred: Math.min(share, Math.max(0, maximumEnergy - recipient.organism.energy)) };
-    }).filter((recipient) => recipient.transferred > 0);
+      const transferred = Math.min(remaining / Math.max(1, recipientsRemaining), Math.max(0, maximumEnergy - recipient.organism.energy));
+      if (transferred <= 0) continue;
+      transfers.push({ ...recipient, transferred });
+      remaining -= transferred;
+    }
     const transferredTotal = transfers.reduce((total, recipient) => total + recipient.transferred, 0);
-    if (transferredTotal <= 0) return;
+    if (transferredTotal <= 0) return { total: 0, external: 0 };
 
     eater.energy -= transferredTotal;
     for (const recipient of transfers) {
@@ -1180,6 +2438,11 @@ export class Simulation {
       this.facetEnergyShared += transferred;
     }
     this.recordTelemetry("facet-sharing", `Facet around organism #${eater.id} shared ${transferredTotal.toFixed(1)} meal energy with weaker members.`);
+    const activeCycle = this.gateFieldCycles.find((cycle) => cycle.endedTick === null && Object.hasOwn(cycle.memberStartEnergy, eater.id));
+    const external = activeCycle
+      ? transfers.filter((recipient) => !Object.hasOwn(activeCycle.memberStartEnergy, recipient.organism.id)).reduce((sum, recipient) => sum + recipient.transferred, 0)
+      : 0;
+    return { total: transferredTotal, external };
   }
 
   applyFacetHarvestAdvantage(eater, mealEnergy) {
@@ -1199,24 +2462,35 @@ export class Simulation {
     return granted;
   }
 
-  feedAttachedBonds(eater, mealEnergy) {
+  feedAttachedBonds(eater, mealEnergy, priorityMemberIds = null) {
     const attachedBonds = [...this.bonds.values()].filter((bond) => bond.firstId === eater.id || bond.secondId === eater.id);
-    if (!attachedBonds.length) return 0;
+    if (!attachedBonds.length) return { total: 0, external: 0 };
 
     const availableEnergy = Math.min(eater.energy, mealEnergy * this.config.bond.mealEnergyFraction);
+    const orderedBonds = priorityMemberIds
+      ? [...attachedBonds.filter((bond) => priorityMemberIds.has(bond.firstId === eater.id ? bond.secondId : bond.firstId)), ...attachedBonds.filter((bond) => !priorityMemberIds.has(bond.firstId === eater.id ? bond.secondId : bond.firstId))]
+      : attachedBonds;
     const proposedShare = availableEnergy / attachedBonds.length;
     let allocatedEnergy = 0;
-    for (const bond of attachedBonds) {
+    let externalAllocation = 0;
+    const activeCycle = this.gateFieldCycles.find((cycle) => cycle.endedTick === null && Object.hasOwn(cycle.memberStartEnergy, eater.id));
+    let remaining = availableEnergy;
+    for (let index = 0; index < orderedBonds.length && remaining > 0; index += 1) {
+      const bond = orderedBonds[index];
       const reserve = bond.reserve ?? this.config.bond.initialReserve;
-      const deposited = Math.min(proposedShare, Math.max(0, this.config.bond.reserveCapacity - reserve));
+      const equallyAvailable = priorityMemberIds ? remaining / (orderedBonds.length - index) : proposedShare;
+      const deposited = Math.min(equallyAvailable, Math.max(0, this.config.bond.reserveCapacity - reserve));
       if (deposited <= 0) continue;
       bond.reserve = reserve + deposited;
       allocatedEnergy += deposited;
+      remaining -= deposited;
+      const partnerId = bond.firstId === eater.id ? bond.secondId : bond.firstId;
+      if (activeCycle && !Object.hasOwn(activeCycle.memberStartEnergy, partnerId)) externalAllocation += deposited;
       this.bondsFed += 1;
       this.bondEnergyFed += deposited;
     }
     eater.energy -= allocatedEnergy;
-    return allocatedEnergy;
+    return { total: allocatedEnergy, external: externalAllocation };
   }
 
   supportLowEnergyMember(member) {
@@ -1249,16 +2523,288 @@ export class Simulation {
     return received;
   }
 
+  getSupportContext(member) {
+    const attachedBonds = [...this.bonds.values()].filter((bond) => bond.firstId === member.id || bond.secondId === member.id);
+    const group = this.getBondGroups().find((memberIds) => memberIds.includes(member.id)) ?? [];
+    const groupIds = new Set(group);
+    const componentBonds = [...this.bonds.values()].filter((bond) => groupIds.has(bond.firstId) && groupIds.has(bond.secondId));
+    const reserve = (bonds) => bonds.reduce((total, bond) => total + (bond.reserve ?? 0), 0);
+    const accessible = (bonds) => bonds.reduce((total, bond) => total + Math.max(0, (bond.reserve ?? 0) - this.config.bond.supportReserveFloor), 0);
+    const directAccessibleReserve = accessible(attachedBonds);
+    return {
+      bonded: attachedBonds.length > 0,
+      componentSize: group.length,
+      attachedBondCount: attachedBonds.length,
+      directReserve: Number(reserve(attachedBonds).toFixed(3)),
+      directAccessibleReserve: Number(directAccessibleReserve.toFixed(3)),
+      componentReserve: Number(reserve(componentBonds).toFixed(3)),
+      componentAccessibleReserve: Number(accessible(componentBonds).toFixed(3)),
+      supportEligible: member.energy < this.config.bond.supportThreshold && directAccessibleReserve > 0,
+      energyBeforeSupport: Number(member.energy.toFixed(3))
+    };
+  }
+
+  relayReserveToMember(member, context) {
+    const config = this.config.bond;
+    if (!config.relayEnabled || member.energy > config.relayCriticalEnergy || context.directAccessibleReserve > 0) {
+      return { withdrawn: 0, delivered: 0 };
+    }
+    const directBonds = [...this.bonds.values()]
+      .filter((bond) => bond.firstId === member.id || bond.secondId === member.id)
+      .sort((first, second) => (first.reserve ?? 0) - (second.reserve ?? 0));
+    for (const directBond of directBonds) {
+      const connectorId = directBond.firstId === member.id ? directBond.secondId : directBond.firstId;
+      const sourceBonds = [...this.bonds.values()]
+        .filter((bond) => bond !== directBond && (bond.firstId === connectorId || bond.secondId === connectorId))
+        .filter((bond) => (bond.reserve ?? 0) > config.supportReserveFloor)
+        .sort((first, second) => (second.reserve ?? 0) - (first.reserve ?? 0));
+      const sourceBond = sourceBonds[0];
+      if (!sourceBond) continue;
+      const directReserve = directBond.reserve ?? config.initialReserve;
+      const directCapacity = Math.max(0, config.reserveCapacity - directReserve);
+      const available = Math.max(0, (sourceBond.reserve ?? 0) - config.supportReserveFloor);
+      const efficiency = 1 - config.relayLossFraction;
+      const withdrawn = Math.min(available, config.maxRelayPerTick, directCapacity / efficiency);
+      if (withdrawn <= 0) continue;
+      const delivered = withdrawn * efficiency;
+      sourceBond.reserve -= withdrawn;
+      directBond.reserve = directReserve + delivered;
+      this.bondRelayTransfers += 1;
+      this.bondRelayEnergyWithdrawn += withdrawn;
+      this.bondRelayEnergyDelivered += delivered;
+      this.energyEconomics.losses.relayTransfer = (this.energyEconomics.losses.relayTransfer ?? 0) + (withdrawn - delivered);
+      return { withdrawn, delivered, sourceBond: this.bondKey(sourceBond.firstId, sourceBond.secondId), directBond: this.bondKey(directBond.firstId, directBond.secondId) };
+    }
+    return { withdrawn: 0, delivered: 0 };
+  }
+
+  recordStarvationDiagnostic(member, context, supportReceived, relay = { withdrawn: 0, delivered: 0 }) {
+    this.starvationDiagnostics.push({
+      tick: this.simulationTicks + 1,
+      organismId: member.id,
+      lineageId: member.lineageId,
+      generation: member.generation,
+      ...context,
+      relayWithdrawn: Number(relay.withdrawn.toFixed(3)),
+      relayDelivered: Number(relay.delivered.toFixed(3)),
+      supportReceived: Number(supportReceived.toFixed(3)),
+      energyAfterSupport: Number(member.energy.toFixed(3)),
+      strandedFromComponent: context.directAccessibleReserve === 0 && context.componentAccessibleReserve > 0
+    });
+    if (this.starvationDiagnostics.length > 1000) this.starvationDiagnostics.shift();
+  }
+
+  getGateNavigationTarget(members) {
+    const navigation = this.config.collectiveWork.navigation;
+    if (!navigation.enabled) return null;
+    const memberIds = new Set(members.map((member) => member.id));
+    const eligibleFacets = this.getFacets()
+      .filter((facet) => facet.memberIds.every((id) => memberIds.has(id)))
+      .map((facet) => ({ ...facet, strength: this.getFacetStrength(facet.memberIds) }))
+      .filter((facet) => facet.strength >= navigation.minimumFacetStrength)
+      .sort((first, second) => second.strength - first.strength || first.key.localeCompare(second.key));
+    const facet = eligibleFacets[0];
+    if (!facet) return null;
+    const committedGateId = this.gateFacetAssignments.get(facet.key);
+    const committedGate = this.workGates.find((gate) => gate.id === committedGateId);
+    if (committedGate) return { gate: committedGate, facetKey: facet.key, committed: true };
+    const claimedGateIds = new Set(this.gateFacetAssignments.values());
+    return this.workGates
+      .filter((gate) => gate.fieldStrength <= 0 && gate.cooldown <= 0 && !claimedGateIds.has(gate.id))
+      .map((gate) => ({ gate, facetKey: facet.key, committed: false, distance: average(members.map((member) => this.distanceToGate(member, gate))) }))
+      .filter((candidate) => candidate.distance <= navigation.detectionRadius)
+      .sort((first, second) => first.distance - second.distance || first.gate.id - second.gate.id)[0] ?? null;
+  }
+
+  getOverflowPlumeNavigationTarget(members) {
+    const chemistry = this.config.chemistry;
+    const navigation = chemistry.overflowPlumeNavigation;
+    if (!chemistry.overflowPlumeEnabled || !navigation.enabled) return null;
+    const memberIds = new Set(members.map((member) => member.id));
+    const hasStrongFacet = this.getFacets()
+      .filter((facet) => facet.memberIds.every((id) => memberIds.has(id)))
+      .some((facet) => this.getFacetStrength(facet.memberIds) >= this.config.facet.minimumBondStrength);
+    if (!hasStrongFacet) return null;
+    const candidates = [];
+    for (let y = 0; y < this.world.height; y += 1) {
+      for (let x = 0; x < this.world.width; x += 1) {
+        const charge = this.world.overflowPlume[y][x];
+        if (charge < chemistry.overflowPlumeEnergyPerFood) continue;
+        const distance = average(members.map((member) => this.distanceBetweenPositions(member, { x, y })));
+        if (distance <= navigation.detectionRadius) candidates.push({ x, y, charge, distance });
+      }
+    }
+    return candidates.sort((first, second) => first.distance - second.distance || second.charge - first.charge)[0] ?? null;
+  }
+
+  clearInvalidGateAssignments() {
+    const activeFacetKeys = new Set(this.getFacets()
+      .filter((facet) => this.getFacetStrength(facet.memberIds) >= this.config.collectiveWork.navigation.minimumFacetStrength)
+      .map((facet) => facet.key));
+    for (const [facetKey, gateId] of this.gateFacetAssignments) {
+      const gate = this.workGates.find((candidate) => candidate.id === gateId);
+      if (!activeFacetKeys.has(facetKey) || !gate || (gate.fieldStrength > 0 && gate.fieldFacetKey !== facetKey)) {
+        this.gateFacetAssignments.delete(facetKey);
+      }
+    }
+  }
+
+  collectiveGateDistance(members, gate, direction = { x: 0, y: 0 }) {
+    return average(members.map((member) => {
+      const position = this.world.wrapPosition(member.x + direction.x, member.y + direction.y);
+      return this.distanceToGate(position, gate);
+    }));
+  }
+
+  componentLifecycleKey(memberIds) {
+    return [...memberIds].sort((first, second) => first - second).join(":");
+  }
+
+  getComponentLifecycleState(members) {
+    return this.componentLifecycle.get(this.componentLifecycleKey(members.map((member) => member.id))) ?? null;
+  }
+
+  updateComponentLifecycle() {
+    const policy = this.config.collectiveWork.componentLifecycle;
+    if (!policy.enabled) {
+      this.componentLifecycle.clear();
+      return;
+    }
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const activeKeys = new Set();
+    const facets = this.getFacets().map((facet) => ({ ...facet, strength: this.getFacetStrength(facet.memberIds) }));
+    for (const memberIds of this.getBondGroups()) {
+      const members = memberIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== memberIds.length) continue;
+      const facet = facets
+        .filter((candidate) => candidate.memberIds.every((id) => memberIds.includes(id)))
+        .filter((candidate) => candidate.strength >= this.config.collectiveWork.navigation.minimumFacetStrength)
+        .sort((first, second) => second.strength - first.strength || first.key.localeCompare(second.key))[0];
+      if (!facet) continue;
+      const key = this.componentLifecycleKey(memberIds);
+      activeKeys.add(key);
+      const record = this.componentLifecycle.get(key) ?? {
+        key, state: "harvest", facetKey: facet.key, gateId: null,
+        depletedSinceTick: null, migrationStartedTick: null, lastStateTick: this.simulationTicks
+      };
+      record.facetKey = facet.key;
+      const assignedGateId = this.gateFacetAssignments.get(facet.key);
+      const gate = this.workGates.find((candidate) => candidate.id === assignedGateId)
+        ?? this.workGates.find((candidate) => candidate.fieldFacetKey === facet.key)
+        ?? null;
+      record.gateId = gate?.id ?? null;
+      const depleted = Boolean(gate) && (gate.exhausted || gate.energyStock <= 0 || gate.fieldStrength <= policy.depletionFieldStrength);
+      const meanEnergyFraction = average(members.map((member) => {
+        const capacity = this.config.organism.reproductionThreshold * 1.8 * (member.genomeProfile.powers[3] ?? 1) * (this.config.organism.energyCapacityMultiplier ?? 1);
+        return member.energy / capacity;
+      }));
+      const previousState = record.state;
+      if (!gate) {
+        record.state = "migrate";
+        record.depletedSinceTick ??= this.simulationTicks;
+      } else if (!depleted) {
+        record.state = "harvest";
+        record.depletedSinceTick = null;
+        record.migrationStartedTick = null;
+      } else {
+        record.depletedSinceTick ??= this.simulationTicks;
+        const dwellTicks = this.simulationTicks - record.depletedSinceTick;
+        record.state = dwellTicks < policy.maxDwellTicksAfterDepletion
+          && meanEnergyFraction >= policy.conserveMinimumMeanEnergyFraction
+          ? "conserve"
+          : "migrate";
+      }
+      record.meanEnergyFraction = Number(meanEnergyFraction.toFixed(3));
+      if (record.state === "migrate") {
+        record.migrationStartedTick ??= this.simulationTicks;
+        if (this.gateFacetAssignments.get(facet.key) === gate?.id) this.gateFacetAssignments.delete(facet.key);
+      }
+      if (record.state !== previousState) {
+        record.lastStateTick = this.simulationTicks;
+        this.recordTelemetry("component-lifecycle", `Component ${key} entered ${record.state} near gate ${record.gateId ?? "none"}.`);
+      }
+      this.componentLifecycle.set(key, record);
+      for (const member of members) member.componentLifecycleState = record.state;
+    }
+    for (const key of this.componentLifecycle.keys()) {
+      if (!activeKeys.has(key)) this.componentLifecycle.delete(key);
+    }
+  }
+
+  getComponentLifecycleConserveIds() {
+    if (!this.config.collectiveWork.componentLifecycle.enabled) return new Set();
+    const eligible = new Set();
+    for (const groupIds of this.getBondGroups()) {
+      const record = this.componentLifecycle.get(this.componentLifecycleKey(groupIds));
+      if (record?.state === "conserve") groupIds.forEach((id) => eligible.add(id));
+    }
+    return eligible;
+  }
+
+  getMigrationTransportEligibleIds() {
+    const transport = this.config.collectiveWork.migrationTransport;
+    if (!transport.enabled || !this.config.collectiveWork.componentLifecycle.enabled) return new Set();
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const eligible = new Set();
+    for (const groupIds of this.getBondGroups()) {
+      if (groupIds.length < transport.minimumMembers) continue;
+      const members = groupIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== groupIds.length) continue;
+      if (this.componentLifecycle.get(this.componentLifecycleKey(groupIds))?.state !== "migrate") continue;
+      const hasStrongFacet = this.getFacets()
+        .filter((facet) => facet.memberIds.every((id) => groupIds.includes(id)))
+        .some((facet) => this.getFacetStrength(facet.memberIds) >= transport.minimumFacetStrength);
+      if (!hasStrongFacet || !this.getGateNavigationTarget(members)) continue;
+      members.forEach((member) => eligible.add(member.id));
+    }
+    return eligible;
+  }
+
+  getCollectiveStrideEligibleIds() {
+    const stride = this.config.collectiveWork.collectiveStride;
+    if (!stride.enabled) return new Set();
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const eligible = new Set();
+    for (const groupIds of this.getBondGroups()) {
+      if (groupIds.length < stride.minimumMembers) continue;
+      const members = groupIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== groupIds.length) continue;
+      if (!members.some((member) => member.brainExecution?.effectors.move >= 0.05)) continue;
+      if (!this.getGateNavigationTarget(members)) continue;
+      members.forEach((member) => eligible.add(member.id));
+    }
+    return eligible;
+  }
+
+  getSatietyMigrationEligibleIds() {
+    const policy = this.config.collectiveWork.satietyMigration;
+    if (!policy.enabled) return new Set();
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const eligible = new Set();
+    for (const groupIds of this.getBondGroups()) {
+      const members = groupIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== groupIds.length || !this.getGateNavigationTarget(members)) continue;
+      const meanEnergyFraction = average(members.map((member) => {
+        const capacity = this.config.organism.reproductionThreshold * 1.8 * (member.genomeProfile.powers[3] ?? 1) * (this.config.organism.energyCapacityMultiplier ?? 1);
+        return member.energy / capacity;
+      }));
+      if (meanEnergyFraction >= policy.minimumMeanEnergyFraction) members.forEach((member) => eligible.add(member.id));
+    }
+    return eligible;
+  }
+
   moveCompounds() {
     const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
     const occupied = new Set(this.organisms.filter((organism) => organism.alive).map((organism) => `${organism.x},${organism.y}`));
 
     const activeGroupKeys = new Set();
+    this.clearInvalidGateAssignments();
     for (const groupIds of this.getBondGroups()) {
       const members = groupIds.map((id) => byId.get(id)).filter(Boolean);
       if (!members.length || !members.some((member) => member.brainExecution?.effectors.move >= 0.05)) continue;
       const memberPositions = new Set(members.map((member) => `${member.x},${member.y}`));
       const groupKey = [...groupIds].sort((first, second) => first - second).join(":");
+      const lifecycle = this.componentLifecycle.get(groupKey) ?? null;
       activeGroupKeys.add(groupKey);
       const collectiveScores = Object.fromEntries(DIRECTIONS.map((direction) => [direction.name,
         members.reduce((total, member) => total + (member.brainExecution?.effectors.direction?.[direction.name] ?? 0), 0) / members.length
@@ -1269,6 +2815,28 @@ export class Simulation {
           && (!occupied.has(`${target.x},${target.y}`) || memberPositions.has(`${target.x},${target.y}`)));
       });
       if (!legalDirections.length) continue;
+      const navigationTarget = this.getGateNavigationTarget(members);
+      const candidateGate = navigationTarget?.gate ?? null;
+      const candidatePlume = this.getOverflowPlumeNavigationTarget(members);
+      const candidateGateDistance = candidateGate ? this.collectiveGateDistance(members, candidateGate) : Infinity;
+      // A plume is only an opportunistic local detour, never a replacement for a closer gate task.
+      const plumeTarget = candidatePlume && candidatePlume.distance < candidateGateDistance ? candidatePlume : null;
+      const navigationGate = plumeTarget ? null : candidateGate;
+      const distanceBeforeNavigation = navigationGate ? this.collectiveGateDistance(members, navigationGate) : null;
+      const distanceBeforePlume = plumeTarget ? average(members.map((member) => this.distanceBetweenPositions(member, plumeTarget))) : null;
+      if (navigationGate) {
+        for (const direction of legalDirections) {
+          if (this.collectiveGateDistance(members, navigationGate, direction) < distanceBeforeNavigation) {
+            collectiveScores[direction.name] += this.config.collectiveWork.navigation.directionBias;
+          }
+        }
+      }
+      if (plumeTarget) {
+        for (const direction of legalDirections) {
+          const nextDistance = average(members.map((member) => this.distanceBetweenPositions(this.world.wrapPosition(member.x + direction.x, member.y + direction.y), plumeTarget)));
+          if (nextDistance < distanceBeforePlume) collectiveScores[direction.name] += this.config.chemistry.overflowPlumeNavigation.directionBias;
+        }
+      }
       const heading = this.compoundHeadings.get(groupKey) ?? members[0].direction.name;
       const strongestScore = Math.max(...legalDirections.map((direction) => collectiveScores[direction.name] ?? 0));
       const strongestDirections = legalDirections.filter((direction) => (collectiveScores[direction.name] ?? 0) === strongestScore);
@@ -1276,14 +2844,29 @@ export class Simulation {
         ?? strongestDirections[0];
       this.compoundHeadings.set(groupKey, direction.name);
       const targets = members.map((member) => this.world.wrapPosition(member.x + direction.x, member.y + direction.y));
+      const navigationMove = Boolean(navigationGate && this.collectiveGateDistance(members, navigationGate, direction) < distanceBeforeNavigation);
+      const plumeNavigationMove = Boolean(plumeTarget && average(members.map((member) => this.distanceBetweenPositions(this.world.wrapPosition(member.x + direction.x, member.y + direction.y), plumeTarget))) < distanceBeforePlume);
+      const strideActive = navigationMove
+        && this.config.collectiveWork.collectiveStride.enabled
+        && members.length >= this.config.collectiveWork.collectiveStride.minimumMembers;
       const decision = {
-        mode: "collective-graph",
+        mode: strideActive ? "collective-stride" : (navigationMove ? "collective-gate-navigation" : (plumeNavigationMove ? "collective-plume-navigation" : "collective-graph")),
         chosen: direction.name,
-        scores: Object.fromEntries(Object.entries(collectiveScores).map(([name, score]) => [name, Number(score.toFixed(2))]))
+        scores: Object.fromEntries(Object.entries(collectiveScores).map(([name, score]) => [name, Number(score.toFixed(2))])),
+        gateId: navigationMove ? navigationGate.id : null,
+        plumeTarget: plumeNavigationMove ? { x: plumeTarget.x, y: plumeTarget.y } : null,
+        lifecycleState: lifecycle?.state ?? null
       };
-      members.forEach((member) => { member.collectiveDecision = decision; });
+      members.forEach((member) => {
+        member.collectiveDecision = decision;
+        member.collectiveStrideActive = strideActive;
+        member.satietyMigrationActive = strideActive && Boolean(this.satietyMigrationEligibleIds?.has(member.id));
+      });
       this.collectiveMoves += 1;
       if (strongestScore > 0) this.collectiveResourceDirectedMoves += 1;
+      if (navigationMove) this.collectiveGateNavigationMoves += 1;
+      if (navigationMove && lifecycle?.state === "migrate") this.componentLifecycleMigrations += 1;
+      if (plumeNavigationMove) this.collectivePlumeNavigationMoves += 1;
 
       for (const member of members) occupied.delete(`${member.x},${member.y}`);
       members.forEach((member, index) => {
@@ -1291,6 +2874,11 @@ export class Simulation {
         member.y = targets[index].y;
         occupied.add(`${member.x},${member.y}`);
       });
+      if (navigationMove && members.every((member) => this.distanceToGate(member, navigationGate) <= this.config.collectiveWork.gateRadius)) {
+        this.collectiveGateArrivals += 1;
+        this.recordComponentEpisodeGateArrival(members, navigationGate);
+        this.gateFacetAssignments.set(navigationTarget.facetKey, navigationGate.id);
+      }
     }
     for (const key of this.compoundHeadings.keys()) {
       if (!activeGroupKeys.has(key)) this.compoundHeadings.delete(key);
@@ -1336,7 +2924,9 @@ export class Simulation {
 
   updateBonds() {
     for (const bond of this.bonds.values()) {
-      bond.reserve = Math.max(0, (bond.reserve ?? this.config.bond.initialReserve) - this.config.bond.maintenancePerTick);
+      const reserveBeforeMaintenance = bond.reserve ?? this.config.bond.initialReserve;
+      bond.reserve = Math.max(0, reserveBeforeMaintenance - this.config.bond.maintenancePerTick);
+      this.energyEconomics.expenses.bondReserveMaintenance += reserveBeforeMaintenance - bond.reserve;
     }
     const candidates = this.organisms.filter((organism) => organism.alive && organism.brainExecution?.effectors.bind >= 0.35);
     const adjacentPairs = this.findAdjacentCandidatePairs(candidates);
@@ -1472,6 +3062,10 @@ export class Simulation {
     this.facetTrailEnabled = Boolean(enabled);
   }
 
+  setEnvironmentMemoryVisualizationEnabled(enabled) {
+    this.environmentMemoryVisualizationEnabled = Boolean(enabled);
+  }
+
   setCourierEnabled(enabled) {
     this.config.courier.enabled = Boolean(enabled);
     if (!this.config.courier.enabled) {
@@ -1513,6 +3107,32 @@ export class Simulation {
     };
   }
 
+  getGateCaptureDiagnostics() {
+    const released = this.gateFoodCaptureRecords;
+    const harvested = released.filter((record) => record.harvest);
+    const releaseMembers = harvested.filter((record) => record.harvest.responsibleMemberAtRelease);
+    const activeFacetHarvests = harvested.filter((record) => record.harvest.responsibleFacetAtHarvest);
+    const competitorHarvests = harvested.filter((record) => !record.harvest.responsibleMemberAtRelease);
+    const mean = (values) => values.length ? Number(average(values).toFixed(2)) : 0;
+    return {
+      released: released.length,
+      harvested: harvested.length,
+      unharvested: released.length - harvested.length,
+      harvestedByResponsibleMemberAtRelease: releaseMembers.length,
+      harvestedByResponsibleFacetAtHarvest: activeFacetHarvests.length,
+      harvestedByCompetitor: competitorHarvests.length,
+      responsibleMemberCaptureFraction: harvested.length ? Number((releaseMembers.length / harvested.length).toFixed(3)) : 0,
+      meanHarvestDelayTicks: mean(harvested.map((record) => record.harvest.delayTicks)),
+      meanCompetitorDistanceFromResponsibleMember: mean(competitorHarvests.map((record) => record.harvest.distanceFromResponsibleMember).filter(Number.isFinite)),
+      recentHarvests: harvested.slice(-20).map((record) => ({
+        gateId: record.gateId,
+        facetKey: record.facetKey,
+        releasedTick: record.releasedTick,
+        ...record.harvest
+      }))
+    };
+  }
+
   getSnapshot() {
     const stateBearers = this.organisms.filter((organism) => organism.genomeProfile.traits.canPersistState);
     const activeStateInputs = this.organisms.reduce((total, organism) => total + (organism.sharedState?.contributors.length ?? 0), 0);
@@ -1525,6 +3145,7 @@ export class Simulation {
         height: this.world.height,
         tiles: this.world.serializeTiles(),
         resources: this.world.serializeResources(),
+        foodAmounts: this.world.serializeFoodAmounts(),
         fires: this.world.serializeFires(),
         signals: this.world.serializeSignals(),
         chemistry: this.world.serializeChemistry(),
@@ -1538,6 +3159,7 @@ export class Simulation {
         speed: this.speed,
         gridEnabled: this.gridEnabled,
         facetTrailEnabled: this.facetTrailEnabled,
+        environmentMemoryVisualizationEnabled: this.environmentMemoryVisualizationEnabled,
         speedOptions: this.config.simulation.speedOptions
       },
       settings: {
@@ -1562,15 +3184,41 @@ export class Simulation {
         ...this.config.environment,
         engineeredFertilityCells: this.world.engineeredFertility.flat().filter((value) => value >= this.config.environment.nicheGrowthThreshold).length
       },
+      environmentMemory: {
+        ...this.config.environmentMemory,
+        ...this.world.getEnvironmentMemoryStatistics(this.config.environmentMemory),
+        writes: this.environmentMemoryWrites,
+        deposited: Number(this.environmentMemoryDeposited.toFixed(3)),
+        energySpent: Number(this.environmentMemoryEnergySpent.toFixed(3)),
+        lineages: [...this.environmentMemoryLineages.values()].map((lineage) => ({
+          ...lineage,
+          deposited: Number(lineage.deposited.toFixed(3)),
+          energySpent: Number(lineage.energySpent.toFixed(3))
+        }))
+      },
       collectiveWork: {
         ...this.config.collectiveWork,
         completions: this.collectiveWorkCompletions,
         foodReleased: this.collectiveWorkFoodReleased,
         attendances: this.collectiveWorkAttendances,
+        navigationMoves: this.collectiveGateNavigationMoves,
+        plumeNavigationMoves: this.collectivePlumeNavigationMoves,
+        navigationArrivals: this.collectiveGateArrivals,
+        activeAssignments: this.gateFacetAssignments.size,
+        satietyMigrationDeferrals: this.satietyMigrationDeferrals,
         activeFields: this.workGates.filter((gate) => gate.fieldStrength > 0).length,
+        componentLifecycle: {
+          ...this.config.collectiveWork.componentLifecycle,
+          ordinaryHarvestDeferrals: this.componentLifecycleDeferrals,
+          migrationMoves: this.componentLifecycleMigrations,
+          components: [...this.componentLifecycle.values()].map((record) => ({ ...record }))
+        },
         fieldHarvests: this.collectiveWorkFieldHarvests,
         fieldHarvestsByWorkers: this.collectiveWorkFieldHarvestsByWorkers,
         fieldHarvestsByOthers: this.collectiveWorkFieldHarvestsByOthers,
+        captureDiagnostics: this.getGateCaptureDiagnostics(),
+        cycleDiagnostics: this.getGateFieldCycleDiagnostics(),
+        componentEpisodeDiagnostics: this.getComponentEpisodeDiagnostics(),
         harvestingLineages: [...this.collectiveWorkHarvestLineages.values()].sort((first, second) => second.harvests - first.harvests),
         gates: this.workGates.map((gate) => ({
           id: gate.id,
@@ -1580,9 +3228,16 @@ export class Simulation {
           phaseTick: gate.phaseTick,
           progress: gate.progress,
           cooldown: gate.cooldown,
+          exhausted: gate.exhausted,
+          energyStock: gate.energyStock,
+          energyStockCapacity: this.config.collectiveWork.gateEnergyStock,
+          energyReleased: gate.energyReleased,
+          fieldStartedTick: gate.fieldStartedTick,
+          lastFieldLifetime: gate.lastFieldLifetime,
           fieldStrength: Number(gate.fieldStrength.toFixed(2)),
           activeFacet: gate.attendingFacetKey,
           fieldFacetKey: gate.fieldFacetKey,
+          assignedFacetKey: [...this.gateFacetAssignments.entries()].find(([, gateId]) => gateId === gate.id)?.[0] ?? null,
           outputMode: this.config.collectiveWork.gateOutputMode,
           ports: this.getGateWorkPorts(gate)
         }))
@@ -1596,7 +3251,13 @@ export class Simulation {
       },
       hazards: { ...this.config.hazards },
       signal: { ...this.config.signal },
-      bonding: { ...this.config.bond },
+      bonding: {
+        ...this.config.bond,
+        relayTransfers: this.bondRelayTransfers,
+        relayEnergyWithdrawn: Number(this.bondRelayEnergyWithdrawn.toFixed(3)),
+        relayEnergyDelivered: Number(this.bondRelayEnergyDelivered.toFixed(3)),
+        relayRescues: this.bondRelayRescues
+      },
       facetCapital: {
         source: "Extra energy recovered when a strong closed facet harvests a resource.",
         rule: "Capital belongs to the three-member topology and can only seed two inherited bonds for a Prime-31 child.",
@@ -1607,11 +3268,33 @@ export class Simulation {
         totalReserve: Number(totalFacetReserve.toFixed(1)),
         averageReserve: Number((totalFacetReserve / Math.max(1, facets.length)).toFixed(1))
       },
+      autonomousFacetBudding: {
+        ...this.config.facet.autonomousBudding,
+        births: this.autonomousFacetBirths,
+        denials: { ...this.autonomousFacetBuddingDenied },
+        ledgers: [...this.facetBuddingLedgers.values()].map((ledger) => ({ ...ledger }))
+      },
       primaryProduction: {
         source: "Fertility-driven resource regrowth",
         latestResourceUnits: this.latestPrimaryProduction,
         totalResourceUnits: this.primaryResourceUnits,
         totalPotentialEnergy: Number(this.primaryPotentialEnergy.toFixed(1))
+      },
+      energeticEconomics: {
+        ...this.energyEconomicsSnapshot(),
+        overflowCapture: {
+          ...this.config.overflowCapture,
+          captured: Number(this.structuralOverflowCaptured.toFixed(3)),
+          capturedByMode: { ...this.structuralOverflowCapturedByMode },
+          recentRouting: this.overflowRoutingRecords.slice(-30)
+        },
+        overflowProvenance: this.getOverflowProvenanceDiagnostics()
+        ,harvestGeometry: this.getHarvestGeometryDiagnostics()
+      },
+      energyLogistics: {
+        retention: "Per-tick server-side diagnostic series; oldest ticks are pruned after the configured limit.",
+        timeSeries: this.energyLogistics.timeSeries,
+        starvationDiagnostics: this.starvationDiagnostics
       },
       distributedState: {
         transport: "Prior-tick persistent values travel across one active bond hop.",
@@ -1624,6 +3307,13 @@ export class Simulation {
         detritus: Number(this.world.totalMaterial(this.world.detritus).toFixed(1)),
         ash: Number(this.world.totalMaterial(this.world.ash).toFixed(1)),
         nutrients: Number(this.world.totalMaterial(this.world.nutrients).toFixed(1))
+        ,deathResidue: Number(this.world.totalMaterial(this.world.deathResidue).toFixed(2)),
+        deathResidueCreated: Number(this.deathResidueCreated.toFixed(2)),
+        deathResidueRecovered: Number(this.deathResidueRecovered.toFixed(2)),
+        overflowPlume: Number(this.world.totalMaterial(this.world.overflowPlume).toFixed(2)),
+        overflowPlumeCreated: Number(this.overflowPlumeCreated.toFixed(2)),
+        overflowPlumeCondensed: Number(this.overflowPlumeCondensed.toFixed(2)),
+        overflowPlumeFoodReleased: this.overflowPlumeFoodReleased
       },
       refinery: {
         enabled: this.config.refinery.enabled,
@@ -1647,6 +3337,7 @@ export class Simulation {
         facetHarvestEnergy: Number(this.facetHarvestEnergy.toFixed(1)),
         facetHarvestReserveEnergy: Number(this.facetHarvestReserveEnergy.toFixed(1)),
         facetBirths: this.facetBirths,
+        autonomousFacetBirths: this.autonomousFacetBirths,
         facetReserveSpent: Number(this.facetReserveSpent.toFixed(1)),
         bondsFed: this.bondsFed,
         bondEnergyFed: Number(this.bondEnergyFed.toFixed(1)),
@@ -1683,6 +3374,7 @@ export class Simulation {
         energyTransfers: this.energyTransfers,
         primaryProduction: this.primaryProductionMarkers,
         facetWorkTrail: this.facetWorkTrail,
+        environmentMemory: this.world.environmentMemory,
         collectiveWork: this.workGates.map((gate) => ({ ...gate }))
       },
       statistics: this.getStatistics()

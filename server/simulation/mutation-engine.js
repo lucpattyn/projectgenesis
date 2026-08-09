@@ -2,16 +2,16 @@ import { cloneGenome, genomePrimes, normalizeGenome } from "./genome.js";
 
 const STRENGTHENABLE_PRIMES = new Set([3, 5, 7]);
 // Every implemented organism capability is evolutionarily reachable through the same arithmetic graph.
-const MUTATABLE_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 31];
+const MUTATABLE_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 31, 41, 43];
 const MAX_PRIME_POWER = 3;
 
 export class MutationEngine {
-  mutate(genome, random) {
+  mutate(genome, random, availablePrimes = MUTATABLE_PRIMES) {
     const before = normalizeGenome(genome);
     const factors = genomePrimes(before);
     const choices = [];
 
-    for (const prime of MUTATABLE_PRIMES) {
+    for (const prime of availablePrimes) {
       if (!factors.includes(prime)) {
         choices.push({ type: "gain", prime });
       }

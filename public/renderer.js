@@ -95,6 +95,8 @@ export class Renderer {
         const ash = chemistry?.ash?.[y]?.[x] ?? 0;
         const detritus = chemistry?.detritus?.[y]?.[x] ?? 0;
         const nutrients = chemistry?.nutrients?.[y]?.[x] ?? 0;
+        const deathResidue = chemistry?.deathResidue?.[y]?.[x] ?? 0;
+        const overflowPlume = chemistry?.overflowPlume?.[y]?.[x] ?? 0;
         const fertility = chemistry?.fertility?.[y]?.[x] ?? 1;
         if (fertility < 0.98) {
           this.context.fillStyle = `rgba(113, 76, 49, ${Math.min(0.32, (1 - fertility) * 0.32)})`;
@@ -112,6 +114,14 @@ export class Renderer {
           this.context.fillStyle = `rgba(180, 186, 190, ${Math.min(0.42, ash * 0.42)})`;
           this.context.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
         }
+        if (deathResidue > 0) {
+          this.context.fillStyle = `rgba(112, 232, 255, ${Math.min(0.5, deathResidue / 8 * 0.5)})`;
+          this.context.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
+        }
+        if (overflowPlume > 0) {
+          this.context.fillStyle = `rgba(94, 255, 214, ${Math.min(0.58, overflowPlume / 40 * 0.58)})`;
+          this.context.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
+        }
 
         const signal = world.signals?.[y]?.[x] ?? 0;
         if (signal >= 4) {
@@ -123,7 +133,9 @@ export class Renderer {
         // Resource marks render after environmental overlays, keeping their identity readable.
         if (world.tiles[y][x] === "FOOD") {
           const resource = world.resources?.[y]?.[x] ?? "GREEN";
+          const foodAmount = world.foodAmounts?.[y]?.[x] ?? 1;
           this.context.fillStyle = RESOURCE_COLORS[resource] ?? RESOURCE_COLORS.GREEN;
+          this.context.globalAlpha = 0.3 + Math.min(1, foodAmount) * 0.7;
           this.context.shadowColor = this.context.fillStyle;
           this.context.shadowBlur = 5;
           this.context.font = `bold ${Math.max(13, cellSize * 1.35)}px ui-monospace, monospace`;
@@ -131,6 +143,7 @@ export class Renderer {
           this.context.textBaseline = "middle";
           this.context.fillText("*", offsetX + x * cellSize + cellSize / 2, offsetY + y * cellSize + cellSize / 2 + 1);
           this.context.shadowBlur = 0;
+          this.context.globalAlpha = 1;
         }
       }
     }
@@ -159,13 +172,27 @@ export class Renderer {
       }
     }
 
+    if ((controls.environmentMemoryVisualizationEnabled ?? true) && snapshot.environmentMemory?.enabled) {
+      const memory = markers.environmentMemory ?? [];
+      for (let y = 0; y < world.height; y += 1) {
+        for (let x = 0; x < world.width; x += 1) {
+          const value = memory[y]?.[x] ?? 0;
+          if (value <= 0) continue;
+          const intensity = Math.min(1, Math.sqrt(value));
+          this.context.fillStyle = `rgba(125, 91, 255, ${0.05 + intensity * 0.42})`;
+          this.context.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
     for (const gate of collectiveWork.gates ?? markers.collectiveWork ?? []) {
       const centerX = offsetX + gate.x * cellSize + cellSize / 2;
       const centerY = offsetY + gate.y * cellSize + cellSize / 2;
       const isObserving = gate.phase === "observe";
       const isResponding = gate.phase === "respond";
-      const color = isResponding ? "#ffcf63" : isObserving ? "#75eaff" : "#7b8b9c";
-      const alpha = gate.phase === "cooldown" ? 0.42 : 0.92;
+      const isExhausted = gate.exhausted || gate.phase === "exhausted";
+      const color = isExhausted ? "#6d5c72" : isResponding ? "#ffcf63" : isObserving ? "#75eaff" : "#7b8b9c";
+      const alpha = isExhausted || gate.phase === "cooldown" ? 0.42 : 0.92;
       this.context.save();
       if ((gate.fieldStrength ?? 0) > 0) {
         this.context.fillStyle = `rgba(114, 255, 152, ${0.06 + gate.fieldStrength * 0.15})`;
@@ -218,7 +245,7 @@ export class Renderer {
       this.context.font = `bold ${Math.max(8, cellSize * 0.58)}px ui-monospace, monospace`;
       this.context.textAlign = "center";
       this.context.textBaseline = "middle";
-      this.context.fillText("⌘", centerX, centerY + 1);
+      this.context.fillText(isExhausted ? "×" : "⌘", centerX, centerY + 1);
       this.context.restore();
     }
 
@@ -321,6 +348,26 @@ export class Renderer {
         this.context.beginPath();
         this.context.arc(centerX, centerY, radius + Math.max(3, cellSize * 0.3), 0, Math.PI * 2);
         this.context.stroke();
+      }
+
+      if (organism.collectiveStrideActive) {
+        this.context.strokeStyle = organism.satietyMigrationActive ? "rgba(114, 255, 184, 0.95)" : "rgba(77, 224, 255, 0.9)";
+        this.context.lineWidth = Math.max(1, cellSize * 0.08);
+        this.context.setLineDash([Math.max(1, cellSize * 0.12), Math.max(1, cellSize * 0.1)]);
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, radius + Math.max(3, cellSize * 0.32), 0, Math.PI * 2);
+        this.context.stroke();
+        this.context.setLineDash([]);
+      }
+
+      if (organism.collectiveTransportActive) {
+        this.context.strokeStyle = "rgba(255, 183, 77, 0.98)";
+        this.context.lineWidth = Math.max(1, cellSize * 0.1);
+        this.context.setLineDash([Math.max(1, cellSize * 0.18), Math.max(1, cellSize * 0.08)]);
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, radius + Math.max(5, cellSize * 0.43), 0, Math.PI * 2);
+        this.context.stroke();
+        this.context.setLineDash([]);
       }
 
       if (organism.energy >= 90) {

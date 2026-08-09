@@ -311,3 +311,145 @@ This is the first tested condition with a large, sustained structural phase at t
 Added a strictly observational canvas layer for long-horizon interpretation. Every tick, each member cell of a strong closed facet adds one bounded count to a persistent per-cell `facetWorkTrail` grid. The renderer displays the accumulated count as a faint logarithmic gold ground glow beneath food, gates, bonds, and organisms. It resets with the world and is never provided to organism sensing, movement, mutation, energy, reproduction, gate logic, or any other simulation rule.
 
 This supports a 2,000-tick qualitative spatial readout of productive regions, migration corridors, repeated gate-work sites, and abandoned structural areas without changing the causal experiment. A regression test verifies that a strong facet marks its occupied cells; live snapshot verification confirms the serialized grid is 64 × 64.
+
+## Phase 16 — Environmental Memory development screen (2026-08-05)
+
+Implemented an independent server-owned environmental-memory layer. Every cell stores a bounded scalar in `[0, 1]`; writes are possible only through the Prime-41 generated graph effector and cost writer energy; reads are possible only through the Prime-43 generated graph sensor. The layer decays by `0.9995` per tick and diffuses synchronously by 1% to cardinal neighbors. It has no direct connection to food, energy gain, movement, reproduction, signals, gates, fertility, chemistry, bonds, or facets. Its blue-purple visual layer is user-switchable and independent of the observer-only facet-work heatmap.
+
+Mechanism tests passed: empty state remains empty; writes clamp; diffusion is symmetric and mass-preserving before decay; Prime 41/43 generate the expected graph nodes; and a matched 20-tick null test with no 41/43 carriers gave identical living-organism trajectories with memory enabled and disabled.
+
+The first matched development screen used three seeds (160100–160102), 500 ticks, high-output port-coupled gates, couriers off, 50% structural founders, and refinery/niche maintenance off. Mutation availability, rather than founder genomes, differed:
+
+| Condition | Prime 41 carriers | Prime 43 carriers | Memory mean | Coverage | Largest region | Writes | Bonds | Facets |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Memory disabled | 0.0 | 0.0 | 0.000 | 0.0% | 0.0 | 0.0 | 14.7 | 8.0 |
+| Write only | 0.7 | 0.0 | 0.002 | 1.4% | 6.3 | 67.7 | 7.0 | 3.7 |
+| Read only | 0.0 | 0.7 | 0.000 | 0.0% | 0.0 | 0.0 | 7.7 | 3.7 |
+| Read + write | 0.3 | 0.0 | 0.002 | 1.3% | 14.7 | 92.3 | 20.0 | 14.7 |
+
+Interpretation: Phase 16 is mechanically active and produces persistent diffusing state when Prime 41 arises. There is no evidence yet that environmental memory is selected as a read/write computational substrate: Prime 43 did not persist at the 500-tick endpoint in the full condition, and this three-seed screen is too small for a selection claim. The read+write condition’s higher final facets is exploratory only because the corresponding read carrier count is zero at the endpoint. Next: run the preregistered longer selection screen with fresh seed blocks before changing decay, diffusion, write cost, graph wiring, or mutation rate.
+
+### 2,000-tick single-seed trajectory
+
+A fresh deterministic live-ecology trajectory (seed `160103`, standard founder genome, default 2% mutation, high port-coupled gates, environmental memory enabled) was run to 2,000 ticks as a spatial-history check. It is a single trajectory, not a selection screen:
+
+| Tick | Population | Bonds | Facets | Gate completions | Prime 41 | Prime 43 | Memory mean | Trail cells |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 500 | 40 | 70 | 114 | 17 | 0 | 0 | 0.0000 | 919 |
+| 1,000 | 12 | 1 | 0 | 49 | 0 | 0 | 0.0000 | 1,249 |
+| 1,500 | 1 | 0 | 0 | 49 | 0 | 0 | 0.0000 | 1,347 |
+| 2,000 | 0 | 0 | 0 | 49 | 0 | 0 | 0.0000 | 1,347 |
+
+This makes the amber heatmap interpretable as a genuine historical record: 1,347 cells retain evidence of the early distributed structural phase even after the population is extinct. The trajectory also confirms the central current limitation. The present ecology can generate a large early facet bloom, but it did not sustain that bloom through 2,000 ticks in this seed. No 41/43 mutation appeared in the surviving lineages, so this run says nothing about environmental-memory selection beyond confirming that a zero-use layer remains neutral.
+
+## Energetic Economics instrumentation (2026-08-05)
+
+Implemented an observational energy ledger before making any ecological adjustment. The ledger records food income by source (ordinary food versus gate-work food); action costs (movement, genome/persistence maintenance, perception, bond coupling, memory writing, signals, and idle waiting); and two separate internal allocations (reproduction into an offspring and structural-bond seeding). It also records energy discarded when an organism reaches its finite storage ceiling, plus energy still held by an organism that dies. An allocation is intentionally not counted as energy destroyed. Deaths retain their immediate cause. Every 100 ticks, the simulation stores a bounded interval delta together with the physically present but unharvested food-energy stock.
+
+The same deterministic seed `160103` was run for 1,000 ticks as an instrumentation check. This is one trajectory and is not a replicated causal result. At tick 1,000 it had 12 organisms. Cumulative harvested energy was 88,655 from ordinary food and 5,729 from gate-work food. Cumulative action costs were movement 26,635, maintenance 2,157, perception 3,196, bond coupling 1,493, memory 0, signals 25, and idle 15. Reproduction allocated 4,046.8 energy to offspring and structural seeding allocated 121.2; those are transfers, not losses. Death causes to tick 1,000 were 39 energy-exhaustion and 25 maximum-age deaths.
+
+The crucial interval observation is qualitative rather than a conclusion: gate-work harvest was 1,695 in ticks 501–600, 60 in 601–700, 1,280 in 701–800, 536 in 801–900, and zero in 901–1,000, while population fell from 40 at tick 500 to 12 at tick 1,000. At the end, 14,740 energy-equivalent units of physical food remained in the world. This suggests an accessibility/organization problem may coexist with energy expenditure; it does not support the simplistic claim that the world simply ran out of food. Replicated 2,000-tick accounting runs are now the required next experiment.
+
+### First replicated baseline and accounting correction
+
+Three fresh 2,000-tick baseline trajectories (`160103`–`160105`) were then run with no parameter changes. All three had zero facets by tick 1,000. Their final populations were 0, 1, and 0; two were extinct by tick 2,000 and the remaining organism was unbonded. This makes structural collapse reproducible in this seed block, although three replicates remain a preliminary screen rather than a final estimate.
+
+The initial ledger revealed a necessary correction before assigning cause: food energy is capped when an organism is already near its finite energy capacity. That discarded surplus had not previously been represented. After adding explicit overflow accounting, seed `160103` at tick 1,000 had harvested 94,384 total energy (88,655 ordinary food; 5,729 gate-work food), spent 33,522 in explicit action costs, allocated 4,047 to offspring, and discarded **56,484** at storage ceilings; 2,993 remained in organisms that subsequently died. The last 100-tick window still discarded 4,054 energy at capacity while no gate-work food was harvested and no reproduction occurred. Therefore the current evidence does not support an energy-shortage story. It points to a temporal and organizational mismatch: energy is abundant when individuals can store little of it, while later the collective structure needed to exploit gate output has already disappeared. This is a hypothesis, not yet a mechanism claim; the next experiment should test whether energy timing/storage/structural continuity, rather than total food quantity, predicts recovery.
+
+### Storage-capacity mechanism screen (2026-08-06)
+
+A new reproducible runner (`scripts/run-energetic-economics.mjs`) changes only the organism energy-storage multiplier; no food, gate, reproduction, mutation, or bonding rule changes. The intended 8-seed × 2,000-tick × three-condition batch was not accepted as evidence because high-capacity worlds became sufficiently dense to exceed the execution limit. This is an engineering constraint, not a biological result. A bounded one-seed, 500-tick mechanism screen (`160103`) completed:
+
+| Capacity | Population | Bonds | Facets | Gate completions | Births | Overflow discarded | Reproductive allocation |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1× baseline | 40 | 70 | 114 | 17 | 50 | 36,656 | 2,032 |
+| 2× storage | 228 | 272 | 171 | 21 | 361 | 4,393 | 48,675 |
+| 4× storage | 198 | 262 | 128 | 28 | 322 | 0 | 43,476 |
+
+This is strong **mechanistic evidence**, not a persistence claim: reducing storage overflow causes a much larger reproductive and structural bloom within 500 ticks. It supports the idea that finite energy storage is causally constraining the conversion of food into descendants and facets. It does not show a stable ecosystem—both enlarged-capacity worlds also had many energy-exhaustion deaths (133 and 124), and their dense populations made naïve long runs computationally expensive. The next valid intervention is to make the batch runner scale safely (periodic aggregate sampling rather than expensive full topology work on every retained state) and then repeat the preregistered 8-seed 2,000-tick comparison. Do not make larger storage the new live default yet.
+
+## Phase 16 — Energy Logistics (2026-08-06)
+
+Implemented the diagnostic phase without changing any ecological mechanism. The server now retains one bounded telemetry entry per simulation tick: population, births/deaths and immediate death causes; total, organism-held, bond-reserve, and facet-reserve energy; food and gate-work harvest; overflow; movement, signal, gate-work, and bond-maintenance expenditure; reproductive investment; bonds, facets, gates, structural births; lineage longevity; and a complete living-energy distribution including Gini inequality. Experiment records now retain the same tick series alongside their periodic samples.
+
+The ledger deliberately reports `energySpentOnGateWork: 0` when it is zero. Present consensus gates have no hidden direct debit; their real individual costs remain movement, perception, persistence, and coupling. Reproduction and structural seeding remain allocations rather than energy destruction. Bond-reserve decay is now measured as an actual reserve decrement rather than an estimate.
+
+A deterministic 150-tick mechanism check (seed `160103`) produced 150 per-tick entries. At tick 150: population 29; stored organism energy 4,463.6; bond reserve 75.6; facet reserve 26.3; energy distribution min/median/mean/max `0.3 / 178.3 / 153.9 / 189.0`; Gini `0.1626`; 11 bonds and 3 facets. The latest tick had 140 harvest energy, 91 overflow, 29 movement cost, 1.54 actual bond-maintenance cost, zero direct gate-work cost, and zero deaths. This verifies instrumentation, not a new ecological conclusion.
+
+### Structural overflow-capture screen (2026-08-06)
+
+Tested one deliberately conservative logistics rule in a matched 3-seed, 500-tick screen (`160103`–`160105`). An organism first fills its normal store. Only 75% of the surplus that would otherwise be discarded is eligible, transfer is 85% efficient, and capture is capped by existing reserves. The live default remains `disabled`. No food, gate, mutation, reproduction, or prime rule changed.
+
+| Capture mode | Population | Bonds | Facets | Gate completions | Births | Discarded overflow | Captured overflow | Starvation deaths |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Disabled | 32.3 | 38.0 | 42.7 | 11.7 | 46.3 | 35,198 | 0.0 | 14.0 |
+| Bond reserve | 34.3 | 43.7 | 45.0 | 14.7 | 46.0 | 33,493 | 85.2 | 11.7 |
+| Closed-facet reserve | 30.0 | 16.7 | 6.0 | 4.0 | 36.7 | 37,714 | 77.7 | 6.7 |
+
+The mechanism itself works: captured energy enters an existing bond or facet reserve and is removed from the discarded-overflow ledger. Bond capture is directionally favorable but small: it retained only about 85 energy against ~35,000 overflow because existing bond reserves fill quickly. Closed-facet capture is unfavorable in this first screen: it changes reserve availability and structural birth paths, producing fewer gates, bonds, facets, and births. Do not enable either mode in the live ecology.
+
+Scientific conclusion: **reserve capacity and release timing, not merely permission to capture overflow, are now the limiting logistics question.** The appropriate next experiment is not to increase reward. It is a narrowly matched reserve-throughput test: alter only how quickly a bounded bond reserve can release support to a low-energy member, while holding total capture capacity and energy loss fixed. This will test whether captured energy can bridge starvation events before it is stranded in a full reserve.
+
+### Bond-reserve throughput screen (2026-08-06)
+
+Tested the stated throughput hypothesis in a matched 3-seed, 500-tick screen. Bond overflow capture remained enabled in all arms at the same 75% eligibility and 85% transfer efficiency. Food, gates, founders, mutation, reproduction, reserve capacity, and transfer loss were fixed. Only `maxSupportReleasePerTick` changed:
+
+| Release/tick | Population | Bonds | Facets | Gates | Births | Starvation deaths | Support energy released | Mean Gini |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.35 baseline | **34.3** | **43.7** | **45.0** | **14.7** | **46.0** | 11.7 | 278.3 | 0.18 |
+| 0.70 moderate | 32.3 | 36.7 | 35.0 | 10.7 | 45.3 | 13.0 | 225.8 | 0.18 |
+| 1.40 high | 29.0 | 24.0 | 9.7 | 8.3 | 40.0 | 11.0 | 177.9 | 0.18 |
+
+This falsifies the immediate throughput hypothesis in this regime. Faster permitted release did not improve survival or reduce energy inequality; it reduced the amount eventually released because reserves emptied more quickly and led to fewer retained bonds/facets/gates. The conservative baseline is the best of the tested rates. Therefore do not increase support throughput in the live ecology.
+
+The next bottleneck is not “support is too slow.” The combined capture and throughput screens instead indicate **reserve capacity and replenishment opportunity are too small relative to the overflow stream**, while rapid reserve draining destabilizes the topology that would retain and redistribute energy. The next diagnostic should compare the timing of reserve filling, reserve depletion, individual starvation, and bond dissolution in the Phase 16 per-tick series before proposing another intervention.
+
+### Compact five-curve timing diagnosis (2026-08-06)
+
+Ran the requested no-intervention diagnostic over three matched default worlds (`160103`–`160105`) for 400 ticks. This short screen compares the five curves on one tick clock: bond-reserve filling, 20% reserve depletion after its peak, first starvation death, 20% bond loss after peak, and 20% facet loss after peak.
+
+| Event | Median tick | Interpretation constraint |
+| --- | ---: | --- |
+| First starvation death | **177** | Occurred while total reserves were still building. |
+| Bond-reserve peak | 355 | Later than first starvation in all three seeds. |
+| 20% reserve depletion after peak | 375 | Observed in two of three trajectories in this window. |
+| 20% facet loss after peak | 371 | Observed in two trajectories; one remained structurally high at tick 400. |
+| 20% bond loss after peak | 386 | Observed in two trajectories; one remained structurally high at tick 400. |
+
+This rules out the simple sequence “reserves empty, then organisms starve, then structure breaks.” Starvation begins much earlier, while substantial aggregate bond reserve is accumulating. The leading diagnosis is now an **access/distribution mismatch**: reserve energy exists in some bonds, but vulnerable organisms are not necessarily attached to, eligible for, or reached by that reserve at the tick they need support. This is not yet proof of a particular cause; the relevant next measurement is lineage- and bond-resolved support: which organism starves, whether it was bonded, adjacent to a reserve, below the support threshold, and how much accessible reserve existed in its connected component.
+
+### Starvation-access diagnosis (2026-08-06)
+
+Added exact starvation-death context without changing any ecological rule: lineage/generation, bonded state, direct bonds and reserves, connected-component reserve, support eligibility, and support actually received on the death tick. Repeated the compact 3-seed, 400-tick default-world screen.
+
+Across 25 starvation deaths, 23 were bonded. **Twenty-one died in a connected bond component that held accessible reserve elsewhere, yet none had accessible reserve on their own attached bond.** Consequently, zero starvation deaths met the current support eligibility rule and zero received support. Mean direct accessible reserve at starvation was `0`; mean accessible reserve elsewhere in the same component was `63.67`.
+
+This identifies the post-storage bottleneck precisely. Bond reserve is currently a **one-hop private store**, not a connected-component energy pool. The support rule can only withdraw from a dying organism's immediate bonds above the 1.5 reserve floor; it cannot relay energy from another bond in the same connected structure. The system therefore contains energy-rich structural components in which individual members still starve.
+
+This is strong diagnosis, not authorization for an automatic fix. The next causal test should be a bounded, lossy **one-hop reserve relay** compared with the present direct-only rule: a reserve-rich adjacent bond may transfer a limited amount into the dying member's direct bond before ordinary support is evaluated. It must retain capacity limits, transfer loss, and a per-tick cap; it must not create a global pool or allow unbonded organisms to benefit.
+
+### One-hop reserve-relay screen (2026-08-06)
+
+Implemented and tested the proposed relay in a matched 3-seed, 400-tick screen. It is disabled by default. When a low-energy member has no accessible direct reserve, a bond sharing its partner may move at most 0.5 reserve energy into the direct bond; the relay loses 20%, then the normal direct-support rule applies. The relay is one hop only, capacity-limited, floor-protected, and unavailable to loose organisms.
+
+| Condition | Population | Bonds | Facets | Births | Gates | Starvation deaths | Stranded deaths |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct-only | **33.0** | **40.3** | **35.3** | **41.3** | **8.3** | 8.3 | 7.0 |
+| One-hop relay | 31.3 | 30.3 | 25.7 | 38.7 | 6.3 | **7.3** | **5.0** |
+
+The relay operated as intended: it made 135.7 transfers, delivered 46.3 reserve energy, and produced 44 immediate rescues on average. It modestly reduced starvation and stranded deaths, confirming the diagnosed access barrier is real. However, it also reduced every structural outcome. The current trigger is too broad: it relays whenever a member is below the ordinary support threshold (24), draining distant bonds pre-emptively and weakening the topology that must persist.
+
+Conclusion: do not enable this relay in the live ecology. The next narrowly justified test is a **critical-only relay**: preserve the same one-hop, lossy, bounded rule but activate it only at immediate death risk (for example, energy below 1–3), after ordinary direct support has failed. This tests whether rare emergency access can prevent avoidable starvation without turning the structure into a continuously drained shared pool.
+
+### Critical-only one-hop relay screen (2026-08-06)
+
+Implemented the emergency version with an explicit control safeguard: ordinary direct support runs first; a one-hop relay runs only if the member remains at energy `<= 2`; ordinary support runs a second time only when relay energy was actually deposited. The direct-only arm therefore preserves the prior ecology exactly. The same 3-seed, 400-tick protocol tested only `relayEnabled`.
+
+| Condition | Population | Bonds | Facets | Births | Gates | Starvation deaths | Stranded deaths |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct-only | 33.0 | **40.3** | 35.3 | 41.3 | 8.3 | 8.3 | 7.0 |
+| Critical-only relay | **34.0** | 38.7 | **39.0** | 41.3 | **9.0** | **7.3** | **5.7** |
+
+The emergency relay made only 36 transfers and delivered 13.3 reserve energy on average (3.3 lost in relay), yet produced 21.7 immediate rescues. Unlike the broad relay, it did not collapse structural outcomes: population, facets, and gate completions were directionally higher, while starvation and stranded deaths were lower. Bonds were modestly lower. This is promising mechanism evidence, not a long-horizon persistence result; three short trajectories are insufficient to enable it in the live ecology.
+
+Next: preregister a larger, performance-safe 1,000–2,000 tick direct-only versus critical-relay replication, reporting the full Phase 16 Logistics series and extinction/last-facet time. Do not add a further mechanism before that replication.

@@ -52,8 +52,17 @@ export class Organism {
     this.lastConsumedResource = null;
     this.sharedState = { connectedNeighbors: 0, contributors: [], mean: 0 };
     this.collectiveDecision = null;
+    this.collectiveStrideActive = false;
+    this.collectiveTransportActive = false;
+    this.satietyMigrationActive = false;
     this.courierReport = null;
     this.courierMemory = null;
+    this.energyLedger = {
+      income: { food: 0, gateWork: 0 },
+      expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, bondReserveMaintenance: 0, gateWork: 0, memory: 0, signals: 0, idle: 0 },
+      losses: { capacityOverflow: 0, deathStoredEnergy: 0 },
+      allocations: { reproduction: 0, structuralSeed: 0, structuralOverflow: 0 }
+    };
   }
 
   chooseRandomDirection() {
@@ -87,9 +96,10 @@ export class Organism {
     return Number.isFinite(value) ? clamp(value, 0, 1.8) : null;
   }
 
-  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, brainExecutor, coupled, neighborStates = [], structuralFocus = null, collectiveWorkCue = 0, collectiveWorkFields = [], courierTarget = null }) {
+  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, environmentMemoryConfig, brainExecutor, coupled, collectiveStrideMultiplier = 1, deferOrdinaryHarvest = false, harvestRestraint = null, neighborStates = [], structuralFocus = null, collectiveWorkCue = 0, collectiveWorkFields = [], courierTarget = null }) {
     let consumedEnergy = 0;
     let consumedResource = null;
+    const energyFlow = { income: { food: 0, gateWork: 0 }, expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, bondReserveMaintenance: 0, gateWork: 0, memory: 0, signals: 0, idle: 0 }, losses: { capacityOverflow: 0, deathStoredEnergy: 0 } };
     if (world.isBurning(this.x, this.y)) {
       this.alive = false;
       this.deathReason = "fire";
@@ -157,6 +167,9 @@ export class Organism {
       "p11-terrain": terrainSignal,
       "p19-input": world.getSignal(this.x, this.y) / 255 * 8 + collectiveWorkCue,
       "p31-neighbor-state": neighborState,
+      "p43-environment-memory": this.genomeProfile.traits.canReadEnvironment && environmentMemoryConfig.enabled
+        ? world.readEnvironmentMemory(this.x, this.y)
+        : 0,
       ...Object.fromEntries(Object.entries(this.perception ?? {}).map(([id, value]) => [`p17-${id}`, value]))
     }, this.brainExecution?.persistentState);
 
@@ -184,7 +197,24 @@ export class Organism {
     const perceptionCost = (strengths[17] ?? 0) * config.perceptionMaintenance;
     const couplingCost = coupled ? config.couplingMaintenance : 0;
 
-    this.energy -= config.moveCost + maintenanceCost + perceptionCost + couplingCost;
+    const movementCost = config.moveCost * collectiveStrideMultiplier;
+    this.energy -= movementCost + maintenanceCost + perceptionCost + couplingCost;
+    energyFlow.expenses.movement += movementCost;
+    energyFlow.expenses.maintenance += maintenanceCost;
+    energyFlow.expenses.perception += perceptionCost;
+    energyFlow.expenses.bonds += couplingCost;
+
+    let memoryWrite = null;
+    if (environmentMemoryConfig.enabled && this.genomeProfile.traits.canWriteEnvironment) {
+      const requested = clamp(this.brainExecution.effectors.environmentWrite, 0, 1);
+      const requestedCost = requested * environmentMemoryConfig.writeEnergyCost;
+      const paidCost = Math.min(Math.max(0, this.energy), requestedCost);
+      const paidFraction = requestedCost > 0 ? paidCost / requestedCost : 0;
+      const deposited = world.writeEnvironmentMemory(this.x, this.y, requested * paidFraction * environmentMemoryConfig.writeGain);
+      this.energy -= paidCost;
+      energyFlow.expenses.memory += paidCost;
+      memoryWrite = { requested, paidCost, deposited };
+    }
 
     const signalOutput = this.brainExecution.effectors.signal;
     if (signalOutput > signalConfig.activationThreshold) {
@@ -194,7 +224,9 @@ export class Organism {
         signalConfig.maxIntensity
       );
       world.addSignal(this.x, this.y, intensity, signalConfig.maxIntensity);
-      this.energy -= intensity / signalConfig.maxIntensity * signalConfig.emissionCost;
+      const signalCost = intensity / signalConfig.maxIntensity * signalConfig.emissionCost;
+      this.energy -= signalCost;
+      energyFlow.expenses.signals += signalCost;
     }
 
     if (canMove) {
@@ -202,24 +234,72 @@ export class Organism {
       this.y = target.y;
     } else if (!coupled) {
       this.energy -= config.idleCost;
+      energyFlow.expenses.idle += config.idleCost;
     }
 
-    if (this.brainExecution.effectors.consume >= 0.5 && currentTile.type === TILE_TYPES.FOOD) {
-      const harvested = world.harvestFood(currentTile.x, currentTile.y, ecologyConfig);
+    const harvestAttempt = this.brainExecution.effectors.consume >= 0.5 && currentTile.type === TILE_TYPES.FOOD;
+    const availableFoodAmount = harvestAttempt ? Math.max(0, Math.min(1, currentTile.foodEnergy ?? 1)) : 0;
+    const unitMealEnergy = harvestAttempt ? config.foodEnergy * resourceYield(currentTile.resource ?? RESOURCE_TYPES.GREEN, this.genomeProfile.powers) : 0;
+    const projectedMealEnergy = unitMealEnergy * availableFoodAmount;
+    const energyCapacity = config.reproductionThreshold * 1.8 * (this.genomeProfile.powers[3] ?? 1) * (config.energyCapacityMultiplier ?? 1);
+    const wouldOverflowHarvest = harvestAttempt && this.energy + projectedMealEnergy > energyCapacity;
+    const restraintApplies = Boolean(harvestRestraint?.enabled)
+      && (!harvestRestraint.ordinaryFoodOnly || currentTile.foodOrigin?.type !== "gate-field");
+    const deferredHarvest = harvestAttempt
+      && currentTile.type === TILE_TYPES.FOOD
+      && deferOrdinaryHarvest
+      && currentTile.foodOrigin?.type !== "gate-field";
+    const restrainedHarvest = harvestAttempt && restraintApplies && wouldOverflowHarvest;
+    const partialHarvesting = Boolean(ecologyConfig.partialHarvesting?.enabled);
+    const requestedFoodAmount = partialHarvesting
+      ? Math.min(availableFoodAmount, Math.max(0, energyCapacity - this.energy) / Math.max(1e-9, unitMealEnergy))
+      : availableFoodAmount;
+    const harvestDecision = harvestAttempt ? {
+      origin: currentTile.foodOrigin?.type ?? "ordinary-food",
+      resource: currentTile.resource ?? RESOURCE_TYPES.GREEN,
+      energyBeforeHarvest: this.energy,
+      energyCapacity,
+      projectedMealEnergy,
+      wouldOverflow: wouldOverflowHarvest,
+      reproductionEligibleBeforeHarvest: this.canReproduce(config),
+      restrained: restrainedHarvest,
+      deferredForMigration: deferredHarvest,
+      availableFoodAmount,
+      requestedFoodAmount
+    } : null;
+    if (harvestAttempt && requestedFoodAmount > 0.000001 && !deferredHarvest && !restrainedHarvest) {
+      const harvested = world.harvestFood(currentTile.x, currentTile.y, ecologyConfig, requestedFoodAmount);
       if (harvested) {
-        consumedEnergy = config.foodEnergy * resourceYield(harvested.resource, this.genomeProfile.powers);
+        consumedEnergy = config.foodEnergy * resourceYield(harvested.resource, this.genomeProfile.powers) * harvested.amount;
+        harvestDecision.harvestedAmount = harvested.amount;
+        harvestDecision.remainingFoodAmount = harvested.remainingAmount;
+        harvestDecision.partial = harvested.remainingAmount > 0;
         this.energy += consumedEnergy;
+        energyFlow.income[harvested.foodOrigin?.type === "gate-field" ? "gateWork" : "food"] += consumedEnergy;
         consumedResource = harvested.resource;
         this.lastConsumedResource = harvested.resource;
-        return this.finishAct({ consumedEnergy, consumedResource, consumedFoodOrigin: harvested.foodOrigin }, config);
+        return this.finishAct({
+          consumedEnergy,
+          consumedResource,
+          consumedFoodOrigin: harvested.foodOrigin,
+          overflowContext: { phase: "harvest", origin: harvested.foodOrigin?.type ?? "ordinary-food", resource: harvested.resource },
+          memoryWrite, harvestDecision,
+          energyFlow
+        }, config);
       }
     }
 
-    return this.finishAct({ consumedEnergy, consumedResource }, config);
+    return this.finishAct({ consumedEnergy, consumedResource, deferredHarvest, restrainedHarvest, harvestDecision, overflowContext: { phase: "metabolic", origin: "none", resource: null }, memoryWrite, energyFlow }, config);
   }
 
   finishAct(result, config) {
-    this.energy = clamp(this.energy, 0, config.reproductionThreshold * 1.8 * (this.genomeProfile.powers[3] ?? 1));
+    const energyCapacity = config.reproductionThreshold * 1.8 * (this.genomeProfile.powers[3] ?? 1) * (config.energyCapacityMultiplier ?? 1);
+    result.overflowEnergy = Math.max(0, this.energy - energyCapacity);
+    result.energyFlow.losses.capacityOverflow += result.overflowEnergy;
+    this.energy = clamp(this.energy, 0, energyCapacity);
+    for (const [kind, values] of Object.entries(result.energyFlow ?? {})) {
+      for (const [key, value] of Object.entries(values)) this.energyLedger[kind][key] += value;
+    }
     if (this.age >= config.maxAge) {
       this.alive = false;
       this.deathReason = "maximum age";
@@ -234,10 +314,12 @@ export class Organism {
   }
 
   reproduce(newId, childPosition, config, { genomeEngine, brainGenerator, mutationEngine }) {
+    const energyBefore = this.energy;
     const sharedEnergy = this.energy * config.reproductionCostFactor;
     this.energy = sharedEnergy;
+    this.energyLedger.allocations.reproduction += Math.max(0, energyBefore - sharedEnergy);
     const mutation = this.random() < config.mutationRate
-      ? mutationEngine.mutate(this.genome, this.random)
+      ? mutationEngine.mutate(this.genome, this.random, config.mutationPrimes)
       : null;
     const childGenomeProfile = genomeEngine.construct(mutation?.after ?? this.genome);
 
@@ -283,8 +365,12 @@ export class Organism {
       signalOutput: Number((this.brainExecution?.effectors.signal ?? 0).toFixed(2)),
       movementDecision: this.movementDecision,
       collectiveDecision: this.collectiveDecision,
+      collectiveStrideActive: this.collectiveStrideActive,
+      collectiveTransportActive: this.collectiveTransportActive,
+      satietyMigrationActive: this.satietyMigrationActive,
       courierReport: this.courierReport,
       courierMemory: this.courierMemory,
+      energyLedger: structuredClone(this.energyLedger),
       color: this.color
     };
   }

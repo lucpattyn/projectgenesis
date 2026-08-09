@@ -185,6 +185,10 @@
             <input id="facet-trail-enabled" type="checkbox" />
             <span>Facet-work heatmap</span>
           </label>
+          <label class="checkbox-label">
+            <input id="environment-memory-enabled" type="checkbox" />
+            <span>Environmental memory layer</span>
+          </label>
         </section>
 
         <section class="panel-block">
@@ -261,6 +265,13 @@
           <p class="eyebrow">Experiment Telemetry</p>
           <h2>Bond Lifecycle</h2>
           <div id="telemetry-panel"><p>Loading telemetry...</p></div>
+        </section>
+
+        <section class="panel-block energy-economics-block">
+          <p class="eyebrow">Energetic Economics</p>
+          <h2>Population Energy Flow</h2>
+          <p>Observational accounting only. Reproduction is an allocation to offspring, not energy destroyed.</p>
+          <div id="energy-economics-panel"><p>Loading energy ledger...</p></div>
         </section>
       </aside>
 
@@ -366,6 +377,7 @@
               <div><span class="guide-swatch ash"></span><p><strong>Gray tint</strong> Ash from burned food.</p></div>
               <div><span class="guide-swatch fertility"></span><p><strong>Brown ground tint</strong> Locally exhausted fertility. It fades as the tile recovers.</p></div>
               <div><span class="legend-swatch production"></span><p><strong>Amber heat squares</strong> Facet-work trail. It accumulates each tick a strong closed facet occupies that cell; bright inner squares identify repeatedly used structural sites and corridors since the last reset.</p></div>
+              <div><span class="guide-swatch signal"></span><p><strong>Blue-purple heat</strong> Environmental memory. A neutral scalar from 0 to 1; only Prime-43 organisms can read it and only Prime-41 organisms can write it. It does not mean food, danger, home, or a trail.</p></div>
               <div><span class="legend-swatch production"></span><p><strong>Gold-green ring</strong> A resource was just created by world-level primary productivity.</p></div>
               <div><span class="phenotype-sample bond"></span><p><strong>Gold links</strong> Structural bonds. Thicker and brighter means stronger.</p></div>
               <div><span class="phenotype-sample facet"></span><p><strong>Gold triangle</strong> Closed three-member facet.</p></div>

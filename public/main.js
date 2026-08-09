@@ -44,6 +44,8 @@ const runExperimentsButton = document.getElementById("run-experiments");
 const cancelExperimentsButton = document.getElementById("cancel-experiments");
 const courierEnabledInput = document.getElementById("courier-enabled");
 const facetTrailEnabledInput = document.getElementById("facet-trail-enabled");
+const environmentMemoryEnabledInput = document.getElementById("environment-memory-enabled");
+const energyEconomicsPanel = document.getElementById("energy-economics-panel");
 
 const renderer = new Renderer(canvas);
 let currentSnapshot = null;
@@ -89,7 +91,10 @@ function renderStats(statistics) {
   }
 }
 
-function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}, refinery = {}, collectiveWork = {}, courier = {}) {
+function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}, refinery = {}, collectiveWork = {}, courier = {}, environmentMemory = {}, energeticEconomics = {}) {
+  const latestEnergyInterval = energeticEconomics.intervals?.at(-1);
+  const energyExpenses = latestEnergyInterval?.expenses ?? energeticEconomics.expenses ?? {};
+  const energyLosses = latestEnergyInterval?.losses ?? energeticEconomics.losses ?? {};
   telemetryPanel.innerHTML = `
     <p class="telemetry-summary">Formed ${telemetry.bondsFormed} | Broken ${telemetry.bondsBroken}</p>
     <p class="telemetry-summary">Facet transfers ${telemetry.facetTransfers ?? 0} | Energy shared ${telemetry.facetEnergyShared ?? 0}</p>
@@ -103,6 +108,9 @@ function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}, re
     <p class="telemetry-summary">Consensus gates ${telemetry.collectiveWorkCompletions ?? 0} completed | ${telemetry.collectiveWorkFoodReleased ?? 0} field food released | ${collectiveWork.activeFields ?? 0} active fields</p>
     <p class="telemetry-summary">Field harvests ${collectiveWork.fieldHarvests ?? 0} | Responsible facet ${collectiveWork.fieldHarvestsByWorkers ?? 0} | Local competitors ${collectiveWork.fieldHarvestsByOthers ?? 0}</p>
     <p class="telemetry-summary">Courier reports ${courier.reportsCreated ?? 0} | Handoffs ${courier.handoffs ?? 0} | Active scouts ${courier.activeScouts ?? 0}</p>
+    <p class="telemetry-summary">Environmental memory ${environmentMemory.enabled ? `mean ${(environmentMemory.average ?? 0).toFixed(3)} | coverage ${Math.round((environmentMemory.coverage ?? 0) * 100)}% | writes ${environmentMemory.writes ?? 0}` : "disabled"}</p>
+    <p class="telemetry-summary">Energy ledger${latestEnergyInterval ? `, latest ${energeticEconomics.intervalTicks}-tick window` : ""}: food +${latestEnergyInterval?.income?.food ?? energeticEconomics.income?.food ?? 0} | costs -${Object.values(energyExpenses).reduce((total, value) => total + value, 0).toFixed(1)} | unharvested potential ${latestEnergyInterval?.unharvestedPotentialEnergy ?? energeticEconomics.unharvestedPotentialEnergy ?? 0}</p>
+    <p class="telemetry-summary">Energy costs: move ${energyExpenses.movement ?? 0} | maintenance ${energyExpenses.maintenance ?? 0} | bonds ${energyExpenses.bonds ?? 0} | memory ${energyExpenses.memory ?? 0} | signals ${energyExpenses.signals ?? 0} | overflow ${energyLosses.capacityOverflow ?? 0} | reproduction allocated ${latestEnergyInterval?.allocations?.reproduction ?? energeticEconomics.allocations?.reproduction ?? 0}</p>
     <p class="telemetry-summary">State bearers ${distributedState.stateBearers ?? 0} | One-hop state inputs ${distributedState.activeStateInputs ?? 0}</p>
     <p class="telemetry-storage">${telemetry.storage}</p>
     <div class="telemetry-events">
@@ -113,6 +121,28 @@ function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}, re
         : "<p>No bond events recorded in this experiment yet.</p>"}
     </div>
   `;
+}
+
+function renderEnergyEconomics(economics = {}, logistics = {}) {
+  const interval = economics.intervals?.at(-1);
+  const income = interval?.income ?? economics.income ?? {};
+  const expenses = interval?.expenses ?? economics.expenses ?? {};
+  const losses = interval?.losses ?? economics.losses ?? {};
+  const allocations = interval?.allocations ?? economics.allocations ?? {};
+  const logisticsEntry = logistics.timeSeries?.at(-1);
+  const total = Math.max(1, ...Object.values(income), ...Object.values(expenses), ...Object.values(losses), ...Object.values(allocations));
+  const flow = (label, value, kind) => `<div class="energy-flow ${kind}"><span>${label}</span><i style="width:${Math.max(2, value / total * 100)}%"></i><b>${Number(value ?? 0).toFixed(1)}</b></div>`;
+  energyEconomicsPanel.innerHTML = `
+    <p class="telemetry-summary">${interval ? `Tick ${interval.tick}; latest ${economics.intervalTicks}-tick window.` : "Accumulating the first accounting window."}</p>
+    <div class="energy-flows">
+      ${flow("Food income", income.food ?? 0, "income")}
+      ${flow("Gate-work income", income.gateWork ?? 0, "income")}
+      ${Object.entries(expenses).map(([key, value]) => flow(key, value, "expense")).join("")}
+      ${Object.entries(losses).map(([key, value]) => flow(key, value, "expense")).join("")}
+      ${Object.entries(allocations).map(([key, value]) => flow(`${key} allocation`, value, "allocation")).join("")}
+    </div>
+    <p class="telemetry-storage">Unharvested physical food potential: ${interval?.unharvestedPotentialEnergy ?? economics.unharvestedPotentialEnergy ?? 0}. Death causes: ${Object.entries(interval?.deathCauses ?? economics.deathCauses ?? {}).filter(([, value]) => value).map(([key, value]) => `${key} ${value}`).join(" | ") || "none recorded"}.</p>
+    <p class="telemetry-storage">Energy distribution: min ${logisticsEntry?.energyDistribution?.minimum ?? 0} | median ${logisticsEntry?.energyDistribution?.median ?? 0} | mean ${logisticsEntry?.energyDistribution?.mean ?? 0} | max ${logisticsEntry?.energyDistribution?.maximum ?? 0} | Gini ${logisticsEntry?.energyDistribution?.gini ?? 0}.</p>`;
 }
 
 function renderExperiments(experiments) {
@@ -131,6 +161,7 @@ function renderExperiments(experiments) {
         <span>Prime 31 ${Math.round(result.meanP31Frequency * 100)}% | Bonds ${result.meanBonds}</span>
         <span>Facet births ${result.meanFacetBirths} | Extinctions ${result.p31Extinctions}/${result.runs}</span>
         ${result.meanGateCompletions !== undefined ? `<span>Gate attendance ${result.meanGateAttendances} | Completions ${result.meanGateCompletions} | Gate food ${result.meanGateFoodReleased}</span><span>Field harvests ${result.meanGateFieldHarvests} | Workers ${result.meanGateFieldWorkerHarvests} | Competitors ${result.meanGateFieldOtherHarvests}</span>` : ""}
+        ${result.meanMemoryAverage !== undefined ? `<span>Memory mean ${result.meanMemoryAverage} | Coverage ${Math.round(result.meanMemoryCoverage * 100)}% | Largest region ${result.meanMemoryLargestRegion}</span><span>Prime 41 ${result.meanP41Carriers} | Prime 43 ${result.meanP43Carriers} | Writes ${result.meanMemoryWrites}</span>` : ""}
         ${result.meanRefineryConversions !== undefined ? `<span>Refinery conversions ${result.meanRefineryConversions} | Food released ${result.meanRefineryFoodReleased}</span>` : ""}
       </article>`).join("")}</div>`
     : "<p class=\"telemetry-storage\">The current batch compares the unmodified ecology with the delayed topology-only refinery.</p>";
@@ -321,6 +352,7 @@ function syncControls(snapshot) {
   fireDurationValue.textContent = snapshot.hazards.fireDuration;
   courierEnabledInput.checked = snapshot.courier?.enabled ?? false;
   facetTrailEnabledInput.checked = snapshot.controls.facetTrailEnabled ?? true;
+  environmentMemoryEnabledInput.checked = snapshot.controls.environmentMemoryVisualizationEnabled ?? true;
   chemistryNote.textContent += ` Couriers ${snapshot.courier?.enabled ? "on" : "off"}: ${snapshot.courier?.activeScouts ?? 0} scouts, ${snapshot.courier?.handoffs ?? 0} handoffs.`;
 }
 
@@ -328,7 +360,8 @@ function renderSnapshot(snapshot) {
   currentSnapshot = snapshot;
   syncControls(snapshot);
   renderStats(snapshot.statistics);
-  renderTelemetry(snapshot.telemetry, snapshot.distributedState, snapshot.facetCapital, snapshot.refinery, snapshot.collectiveWork, snapshot.courier);
+  renderTelemetry(snapshot.telemetry, snapshot.distributedState, snapshot.facetCapital, snapshot.refinery, snapshot.collectiveWork, snapshot.courier, snapshot.environmentMemory, snapshot.energeticEconomics);
+  renderEnergyEconomics(snapshot.energeticEconomics, snapshot.energyLogistics);
   renderGenerators(snapshot.generators);
   renderGenomeInspector(snapshot);
   renderLiveBrain(snapshot);
@@ -451,6 +484,7 @@ fireSpreadInput.addEventListener("change", () => postJson("/api/settings", { fir
 fireDurationInput.addEventListener("change", () => postJson("/api/settings", { fireDuration: Number(fireDurationInput.value) }));
 courierEnabledInput.addEventListener("change", () => postJson("/api/settings", { courierEnabled: courierEnabledInput.checked }));
 facetTrailEnabledInput.addEventListener("change", () => postJson("/api/settings", { facetTrailEnabled: facetTrailEnabledInput.checked }));
+environmentMemoryEnabledInput.addEventListener("change", () => postJson("/api/settings", { environmentMemoryVisualizationEnabled: environmentMemoryEnabledInput.checked }));
 fireIgnitionInput.addEventListener("input", () => { fireIgnitionValue.textContent = Number(fireIgnitionInput.value).toFixed(3); });
 fireSpreadInput.addEventListener("input", () => { fireSpreadValue.textContent = Number(fireSpreadInput.value).toFixed(2); });
 fireDurationInput.addEventListener("input", () => { fireDurationValue.textContent = fireDurationInput.value; });
