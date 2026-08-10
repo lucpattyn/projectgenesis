@@ -345,6 +345,134 @@ Interpretation: more healthy components travel more often, so aggregate migratio
 
 The attempted 1,000-tick transport run was stopped after exceeding the local execution window as the world became dense; do not cite it as a result. Keep the toggle disabled. Next add explicit transport-active distance/move/cost telemetry, then run a completed longer replication. Success requires lower migration loss per distance and improved persistence, not just a short-horizon facet bloom.
 
+## Next research phase — collective identity longitudinal analysis
+
+### Why this is next
+
+The recent live world shows multiple dense, long-looking bonded colonies. Phase 16 established that dark heatmap regions are generally farther from gates while retaining more food: the world now distinguishes ordinary foraging territory from productive structural-work territory. The next question is no longer merely whether facets form or migrate.
+
+> Does a structural collective have a lifetime longer than the individual organisms that compose it?
+
+If organisms can die, offspring can join, bonds can turn over, and the same recognizable collective can still migrate, exploit gates, and persist, then the relevant evolutionary unit may be a collective rather than only an individual genome.
+
+### Scope rule
+
+This phase is **instrumentation only**. Do not add primes, food, resources, gate mechanics, reproduction rules, neural networks, or new ecological rewards. The immediate goal is to measure collective continuity honestly.
+
+### Required implementation: collective lineage tracker
+
+Add server-side tracking of a persistent `collectiveLineage` entity across snapshots. Do **not** equate a lineage with a single instantaneous bond-group ID, because groups can gain/lose members and alter bonds.
+
+At a bounded snapshot cadence, derive each candidate collective from bonded components containing at least one strong closed facet. Match candidates to prior collective lineages using explicit, inspectable continuity evidence:
+
+1. member overlap (including direct descendants where lineage identity is available);
+2. bond overlap;
+3. facet/topology overlap;
+4. spatial proximity / centroid continuity.
+
+Use conservative thresholds. Record uncertainty rather than forcing a match. Explicitly represent:
+
+- birth;
+- continuation;
+- split;
+- merge;
+- death / disappearance;
+- uncertain match.
+
+### Stage 1 complete — instantaneous collective census (2026-08-10)
+
+Implemented the first, audit-only layer as `collectiveWork.collectiveCensus`. Every 20 ticks it records every bonded component that contains at least one strong facet. The snapshot exposes a bounded recent census; `scripts/run-collective-census-screen.mjs` runs an offline check.
+
+Each census record includes the raw member IDs, member/bond/facet counts, bond density, cycle rank, bridge bonds, articulation points, leaves, branch points, maximum degree, graph diameter, mean shortest path, centroid, spatial extent, elongation, energy, bond/facet reserve, lifecycle state, transport-active members, assigned gates, and nearest-gate distance. These are descriptive measurements only; no morphology label has ecological force.
+
+First 250-tick audit, seed `160103`, demonstrates that the census distinguishes meaningful topologies:
+
+- a 12-member dense component: 40 bonds, 19 strong facets, cycle rank 29, zero bridge bonds, graph diameter 3;
+- a 4-member triangle-plus-appendage: 4 bonds, one strong facet, one bridge bond, one articulation point;
+- a compact 3-member facet: 3 bonds, one triangle, zero bridges, graph diameter 1.
+
+This validates the measurement substrate. **Next implementation step:** conservative matching of consecutive census records into collective-lineage candidates; do not add ecological behavior or morphology-specific tuning.
+
+### Stage 2 complete — conservative collective lineage matching (2026-08-10)
+
+Implemented `collectiveWork.collectiveLineageTracking` on top of consecutive census samples. A continuation requires conservative evidence from exact-member and direct parent→child replacement, with bond overlap, strong-facet overlap, and centroid proximity as corroboration. A score of at least `0.62` and member continuity of at least `0.50` are required.
+
+The tracker deliberately refuses to force identity through ambiguity. Candidate split and merge evidence becomes `split-ambiguous`, `merge-ambiguous`, or `uncertain-birth` events; only one-to-one qualifying matches continue a lineage. Each lineage records founding/current members, maximum size/bonds/facets, turnover, direct-descendant recruits, topology changes, distance travelled, migration transitions, observed gate assignments, founder survival, and bounded recent history.
+
+Initial 250-tick audit, seed `160103`:
+
+- collective lineage 1 persisted from tick 100 to 240 (150 ticks; 8 samples);
+- it changed membership 28 times, recruited 12 direct descendants, changed topology 7 times, and entered migration 3 times;
+- it travelled 30.9 cells, reached maximum size 20, maximum 74 bonds, and maximum 130 strong facets;
+- four founders were still alive at the final sample, so this is **not** evidence that the collective outlived its founders.
+
+This validates matching mechanics, not the central biological claim. **Next research action:** run replicated longer, fixed-seed longitudinal screens and report the fraction of lineages persisting after all founding members have died, together with ambiguous split/merge rates.
+
+### Per-collective longitudinal record
+
+For each collective lineage, store a time series and final summary containing:
+
+- collective ID, birth tick, end tick, lifetime;
+- current / maximum population;
+- original member IDs, retained founding members, member turnover, member deaths, recruits, offspring;
+- bond count, facet count, topology signature and topology-change rate;
+- gates approached, visited, completed, and field harvests;
+- ordinary food harvested, gate food harvested, food captured by competitors where attributable;
+- distance travelled, directed migration moves, migration events;
+- component energy start/end, phase-resolved surplus/deficit, reserve estimates;
+- structural births and autonomous births if enabled in future;
+- centroid/path history at a bounded cadence;
+- whether the collective persists after every founding member has died.
+
+### Primary analyses
+
+Run replicated fixed-seed worlds and report:
+
+1. distribution of collective lifetimes;
+2. fraction of collectives outliving their median member lifetime;
+3. fraction persisting after zero founding members remain;
+4. member, bond, and facet turnover versus collective continuity;
+5. topology persistence / change rate;
+6. gate productivity, energy balance, and migration cost for persistent vs transient collectives;
+7. split/merge frequency and uncertainty rate.
+
+### Success criterion
+
+The phase succeeds if the system can make a defensible statement such as:
+
+> “Some bonded collectives persisted across multiple gate cycles and substantial member turnover; their continuation cannot be explained merely by an unchanged set of individuals.”
+
+This is not a claim of intelligence. It is evidence for a candidate **persistent collective organism**, the necessary substrate for later collective specialization, memory, computation, and adaptive problem solving.
+
+### Important caveat
+
+The present live canvas is suggestive but not proof. Never infer collective identity from visual similarity alone. Preserve raw continuity evidence, thresholds, and uncertain cases so researchers can audit every asserted lineage.
+
+## Morphology analysis — required within the collective tracker
+
+The tracker must describe morphology as measured structure, not as a visual label. Do not hard-code conclusions such as “mesh means durable.” For every tracked collective at each sampling point, compute at minimum:
+
+- member count; bond count; facet count; bond density;
+- connected-component diameter and mean shortest-path length;
+- articulation points / bridge-bond count (fragility of chains);
+- cycle and triangle density (redundancy / facet richness);
+- maximum member degree, leaf fraction, and branch-point count;
+- spatial extent, centroid, perimeter proxy, and directional elongation;
+- reserve held, maintenance cost, migration cost per distance, food/gate income, and survival under member/bond loss.
+
+Test these observations rather than assuming them:
+
+| Morphology hypothesis | Required evidence |
+| --- | --- |
+| Dense mesh is durable but expensive | Greater survival after bond/member loss **and** higher maintenance per tick |
+| Long chain is mobile/exploratory | Greater distance or gate discovery per member **and** more bridge-related fragmentation |
+| Triangle-rich structure retains resources | Higher accessible reserve / positive cycle balance after controlling for size |
+| Branched network covers territory | Greater spatial extent or gate detection **and** a measured coordination/maintenance cost |
+| Small compact facet is efficient but fragile | Lower cost and fast gate completion **but** lower reserve/redundancy survival |
+| Large compound is stable but slow/scarcity-vulnerable | Higher disruption survival **but** higher migration cost per distance or food requirement |
+
+Only after the longitudinal data establishes a missing but theoretically justified trade-off should a narrow physical rule be considered. The first task is correlation and causal comparison, not morphology-specific tuning.
+
 ## Useful commands
 
 ```powershell
@@ -360,3 +488,43 @@ node server/index.js
 ## Repository state
 
 The worktree contains substantial uncommitted Phase 16 and earlier work. Preserve unrelated changes; inspect `git status --short` before staging or committing. The current session has passed `npm test` after the recent gate, commitment, and finite-stock changes.
+### Replicated 500-tick collective-lineage baseline (2026-08-10)
+
+The conservative tracker was screened on two fixed seeds:
+
+| Seed | Candidate lineages | Longest lifetime | Max members | Turnover | Direct descendant recruits | Topology changes | Migration events |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 160103 | 12 | 240 ticks | 17 | 18 | 8 | 11 | 3 |
+| 160104 | 9 | 260 ticks | 14 | 12 | 4 | 9 | 3 |
+
+No lineage yet persisted through complete founder loss. Treat this as the
+current scientific boundary: component-scale continuity has been measured;
+founder-independent collective persistence has not yet been demonstrated.
+### Scalable headless lineage-batch protocol and first 2,000-tick results (2026-08-10)
+
+Implemented `scripts/run-collective-lineage-batch.mjs`.
+
+- It runs without the browser server or canvas-only marker/trail work.
+- It leaves ecology, gate mechanics, bonding, reproduction, and energy rules unchanged.
+- It uses `collectiveCensus.detailLevel = "lightweight"` at a configurable coarse cadence, with compact checkpoints written to `research-results/`.
+- Engine optimization: bond connected components are cached between bond updates; BFS no longer uses `Array.shift()`.
+
+Verified two 2,000-tick isolated seeds:
+
+| Seed | Final pop. | Candidate lineages | Longest | Result |
+| --- | ---: | ---: | ---: | --- |
+| 160103 | 264 | 29 | 400 ticks | Dynamic turnover/migration, no full-founder replacement |
+| 160104 | 8 | 15 | 500 ticks | Gate-visiting collective followed by ecosystem collapse, no full-founder replacement |
+
+Research conclusion: the pipeline is now scalable enough for replicated long-horizon lineage work. The next question is no longer whether components can persist and reorganize; it is what prevents a component from maintaining identity once its founders are fully replaced.
+### Headless batch parity validation (2026-08-10)
+
+Added `scripts/check-headless-batch-parity.mjs`. At seed 160103 for 500 ticks
+and a shared 20-tick census cadence, normal and headless/lightweight observation
+matched exactly on population, births, deaths, bonds, strong facets, gate work,
+and lineage counts. The batch mode is therefore validated as an observer-only
+optimization.
+
+This clears the prerequisite for Phase 17 morphology work. Recommended first
+morphology stage: observation and classification before assigning any new
+morphology-specific benefit/cost contracts.

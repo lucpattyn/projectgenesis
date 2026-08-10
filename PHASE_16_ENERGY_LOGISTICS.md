@@ -421,3 +421,64 @@ Implemented the narrow transport hypothesis as an experimental disabled toggle. 
 The apparent contradiction is informative. Aggregate migration expense rose because healthier components made more migration moves, but the cycle as a whole retained substantially more energy and arrived in a better state. Relative to directed moves, estimated migration expense fell from about `0.64` to `0.58` energy per move. Thus transport is doing physical work rather than creating an accounting illusion, but migration remains net-negative at this setting.
 
 A one-seed 1,000-tick transport run became sufficiently structurally dense to exceed the local execution window and was stopped without treating it as evidence. **Decision:** keep transport experimental and disabled by default until a completed longer replication; add explicit per-move transport cost and distance telemetry before changing the multiplier. The next success criterion is not more facets at 500 ticks, but a completed longer run in which migration loss per unit distance falls and component persistence improves without shifting the deficit into another phase.
+
+### Structural-work void diagnosis (2026-08-09)
+
+Tested the apparent dark heatmap regions internally rather than interpreting the canvas alone. `scripts/run-work-void-diagnosis.mjs` ran two seeded 500-tick live-policy worlds and compared zero-trail cells against cells with any cumulative facet work.
+
+| Mean across seeds 160103 and 160104 | Zero-trail (“void”) cells | Worked cells |
+| --- | ---: | ---: |
+| Fraction of world | 77.6% | 22.4% |
+| Mean nearest-gate distance | **14.49** | 9.76 |
+| Within 14-cell gate-sensing range | 55.0% | **74.3%** |
+| Current food occupancy | **17.7%** | 12.8% |
+
+The pattern replicated in both seeds. Structural-work voids are systematically farther from gates, while retaining *more* remaining food. This rules out the simple visual interpretation that the dark regions are merely depleted or inaccessible. They are currently low-value for **collective** work because food alone does not pay the formation, maintenance, and gate-access economics of a facet.
+
+**Interpretation:** the system is producing a genuine spatial distinction between ordinary foraging space and productive structural-work space. It remains an inference rather than proof of a permanent niche boundary: future tests should measure the same regions over time and perturb gate locations. Still, the voids are not random-looking absence; they are consistent with gate-centered collective ecology.
+### Collective lineage tracker: replicated 500-tick baseline (2026-08-10)
+
+The tracker now assigns a durable lineage ID only when one prior and one current
+strong-facet component have sufficient overlapping membership (including direct
+offspring), shared bonds/facets, and spatial continuity. Ambiguous merges and
+splits are explicitly logged rather than silently treated as persistence.
+
+| Seed | Candidate lineages | Longest observed lifetime | Max members | Max bonds | Max strong facets | Member turnover | Migration events | Gates visited |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 160103 | 12 | 240 ticks | 17 | 45 | 47 | 18 | 3 | 4, 7, 1 |
+| 160104 | 9 | 260 ticks | 14 | 38 | 44 | 12 | 3 | 5, 3 |
+
+Both runs produced collectives that changed composition, topology, location, and
+gate use over hundreds of ticks. Neither produced a component that remained
+identified after all founding members had died. The result is therefore evidence
+for substantial collective continuity, but not yet evidence that the collective
+itself survives complete founder replacement.
+### Scalable headless collective-lineage batch (2026-08-10)
+
+Longitudinal collective tests now run through `scripts/run-collective-lineage-batch.mjs`, independently of the browser server and canvas-only state. The batch mode preserves the world, ecology, gate, bond, and reproduction rules. It changes observation cost only:
+
+- headless mode omits canvas markers and heatmap updates;
+- census runs at a configurable coarse cadence (default 100 ticks);
+- lineage matching retains member/direct-offspring, sampled-bond, facet, and spatial evidence;
+- large topology is recorded as explicitly labelled lightweight evidence rather than expensive all-pairs path statistics;
+- compact JSON checkpoints and final results are written under `research-results/`.
+
+Two isolated 2,000-tick seeds completed under this protocol.
+
+| Seed | Final population | Candidate lineages | Longest lineage | Longest lineage behaviour | Founder-independent persistence |
+| --- | ---: | ---: | ---: | --- | --- |
+| 160103 | 264 | 29 | 400 ticks | 14 turnover events, 3 direct descendant recruits, 41.31 cells travelled | No |
+| 160104 | 8 | 15 | 500 ticks | 12 turnover events, 4 direct descendant recruits, 39.63 cells travelled, gates 4 and 6 | No |
+
+The protocol is now practical for replicated 2,000-tick studies. The scientific result remains conservative: components can be long-lived and dynamically reconfigured, but neither run retained a lineage after complete loss of its founding members.
+### Headless-observer parity validation (2026-08-10)
+
+`scripts/check-headless-batch-parity.mjs` compared a normal full-observation run
+against the headless lightweight-observation run at seed 160103 for 500 ticks
+with the same 20-tick census cadence. All checked physics and lineage outcomes
+matched exactly: population 23, births 53, deaths 30, bonds 17, strong facets 1,
+gate completions 10, gate food released 50, total collective lineages 4, active
+collective lineages 1, and founder-replacement lineages 0.
+
+This validates the intended separation: headless batch mode removes observation
+cost, not ecological behaviour.

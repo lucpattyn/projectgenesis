@@ -31,6 +31,8 @@ export class Simulation {
     this.isPaused = false;
     this.gridEnabled = false;
     this.facetTrailEnabled = true;
+    // Batch experiments may omit canvas-only state without changing ecology.
+    this.headlessObservationMode = false;
     this.speed = this.config.simulation.defaultSpeed;
     this.tickIntervalMs = 1000 / this.config.simulation.tickRate;
     this.timer = null;
@@ -49,6 +51,7 @@ export class Simulation {
     this.facetWorkTrail = Array.from({ length: this.world.height }, () => Array(this.world.width).fill(0));
     this.compoundHeadings = new Map();
     this.bonds = new Map();
+    this.bondGroupsCache = null;
     this.bondCandidates = new Map();
     this.structuralBirthSeeds = new Map();
     this.facetReserves = new Map();
@@ -83,6 +86,11 @@ export class Simulation {
     this.componentLifecycle = new Map();
     this.componentLifecycleDeferrals = 0;
     this.componentLifecycleMigrations = 0;
+    this.collectiveCensusRecords = [];
+    this.collectiveLineages = new Map();
+    this.collectiveLineageEvents = [];
+    this.previousCollectiveCensusCandidates = [];
+    this.nextCollectiveLineageId = 1;
     this.collectiveWorkHarvestLineages = new Map();
     this.gateFoodCaptureRecords = [];
     this.nextGateFoodCaptureId = 1;
@@ -322,9 +330,10 @@ export class Simulation {
     this.removeDeadOrganisms();
     this.updateComponentEpisodes();
     this.updateFacetReserves();
-    this.recordFacetWorkTrail();
+    if (!this.headlessObservationMode) this.recordFacetWorkTrail();
     this.updateCollectiveWork();
-    this.updateMarkers();
+    this.captureCollectiveCensus();
+    if (!this.headlessObservationMode) this.updateMarkers();
     const production = this.world.growFood(
       this.config.food.growthRate,
       this.config.food.maxGrowthAttemptsPerTick * this.speed,
@@ -335,9 +344,11 @@ export class Simulation {
     this.latestPrimaryProduction = production.count;
     this.primaryResourceUnits += production.count;
     this.primaryPotentialEnergy += production.count * this.config.organism.foodEnergy;
-    this.primaryProductionMarkers.push(...production.positions.map((position) => ({ ...position, ttl: 4 })));
-    if (this.primaryProductionMarkers.length > MAX_PRIMARY_PRODUCTION_MARKERS) {
-      this.primaryProductionMarkers.splice(0, this.primaryProductionMarkers.length - MAX_PRIMARY_PRODUCTION_MARKERS);
+    if (!this.headlessObservationMode) {
+      this.primaryProductionMarkers.push(...production.positions.map((position) => ({ ...position, ttl: 4 })));
+      if (this.primaryProductionMarkers.length > MAX_PRIMARY_PRODUCTION_MARKERS) {
+        this.primaryProductionMarkers.splice(0, this.primaryProductionMarkers.length - MAX_PRIMARY_PRODUCTION_MARKERS);
+      }
     }
     this.world.updateEnvironmentMemory(this.config.environmentMemory);
 
@@ -1095,6 +1106,7 @@ export class Simulation {
     this.birthMarkers = [];
     this.deathMarkers = [];
     this.bonds.clear();
+    this.bondGroupsCache = null;
     this.bondCandidates.clear();
     this.structuralBirthSeeds.clear();
     this.facetReserves.clear();
@@ -1127,6 +1139,11 @@ export class Simulation {
     this.componentLifecycle.clear();
     this.componentLifecycleDeferrals = 0;
     this.componentLifecycleMigrations = 0;
+    this.collectiveCensusRecords = [];
+    this.collectiveLineages.clear();
+    this.collectiveLineageEvents = [];
+    this.previousCollectiveCensusCandidates = [];
+    this.nextCollectiveLineageId = 1;
     this.collectiveWorkHarvestLineages.clear();
     this.gateFoodCaptureRecords = [];
     this.nextGateFoodCaptureId = 1;
@@ -2170,6 +2187,7 @@ export class Simulation {
   }
 
   getBondGroups() {
+    if (this.bondGroupsCache) return this.bondGroupsCache;
     const links = new Map();
     for (const bond of this.bonds.values()) {
       if (!links.has(bond.firstId)) links.set(bond.firstId, new Set());
@@ -2185,8 +2203,8 @@ export class Simulation {
       const group = [];
       const queue = [id];
       visited.add(id);
-      while (queue.length) {
-        const currentId = queue.shift();
+      for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+        const currentId = queue[queueIndex];
         group.push(currentId);
         for (const neighborId of links.get(currentId) ?? []) {
           if (!visited.has(neighborId)) {
@@ -2197,7 +2215,415 @@ export class Simulation {
       }
       groups.push(group);
     }
-    return groups;
+    this.bondGroupsCache = groups;
+    return this.bondGroupsCache;
+  }
+
+  getComponentTopologyMetrics(memberIds, { internalBonds: suppliedBonds = null, detailLevel = "full" } = {}) {
+    const ids = [...memberIds].sort((first, second) => first - second);
+    const idSet = new Set(ids);
+    const adjacency = new Map(ids.map((id) => [id, new Set()]));
+    const internalBonds = suppliedBonds ?? [...this.bonds.values()].filter((bond) => idSet.has(bond.firstId) && idSet.has(bond.secondId));
+    for (const bond of internalBonds) {
+      adjacency.get(bond.firstId).add(bond.secondId);
+      adjacency.get(bond.secondId).add(bond.firstId);
+    }
+    const degrees = ids.map((id) => adjacency.get(id).size);
+    const memberCount = ids.length;
+    const bondCount = internalBonds.length;
+    const allBondKeys = internalBonds.map((bond) => this.bondKey(bond.firstId, bond.secondId)).sort();
+    if (detailLevel !== "full") {
+      const limit = Math.max(1, this.config.collectiveWork.collectiveCensus.lightweightBondSampleLimit ?? 64);
+      const bondKeys = allBondKeys.length <= limit
+        ? allBondKeys
+        : Array.from({ length: limit }, (_, index) => allBondKeys[Math.floor(index * (allBondKeys.length - 1) / Math.max(1, limit - 1))]);
+      return {
+        bondCount,
+        bondKeys,
+        bondKeysSampled: bondKeys.length < allBondKeys.length,
+        bondDensity: Number((bondCount / Math.max(1, memberCount * (memberCount - 1) / 2)).toFixed(3)),
+        cycleRank: Math.max(0, bondCount - memberCount + 1),
+        bridgeCount: null,
+        bridgeBonds: [],
+        articulationPointCount: null,
+        leafCount: degrees.filter((degree) => degree === 1).length,
+        branchPointCount: degrees.filter((degree) => degree >= 3).length,
+        maximumDegree: Math.max(0, ...degrees),
+        diameter: null,
+        meanShortestPath: null,
+        pathMetricSampled: true,
+        pathMetricSources: 0,
+        detailLevel: "lightweight"
+      };
+    }
+    const discovery = new Map();
+    const low = new Map();
+    const parent = new Map();
+    const articulationPoints = new Set();
+    const bridges = [];
+    let time = 0;
+    const visit = (id) => {
+      discovery.set(id, ++time);
+      low.set(id, time);
+      let children = 0;
+      for (const neighbor of adjacency.get(id)) {
+        if (!discovery.has(neighbor)) {
+          parent.set(neighbor, id);
+          children += 1;
+          visit(neighbor);
+          low.set(id, Math.min(low.get(id), low.get(neighbor)));
+          if ((parent.has(id) && low.get(neighbor) >= discovery.get(id)) || (!parent.has(id) && children > 1)) articulationPoints.add(id);
+          if (low.get(neighbor) > discovery.get(id)) bridges.push([Math.min(id, neighbor), Math.max(id, neighbor)]);
+        } else if (neighbor !== parent.get(id)) {
+          low.set(id, Math.min(low.get(id), discovery.get(neighbor)));
+        }
+      }
+    };
+    for (const id of ids) if (!discovery.has(id)) visit(id);
+
+    let totalPathLength = 0;
+    let pathPairs = 0;
+    let diameter = 0;
+    const sourceLimit = Math.max(1, this.config.collectiveWork.collectiveCensus.topologyPathSourceLimit ?? 48);
+    const sampledPaths = ids.length > sourceLimit;
+    const pathSources = sampledPaths
+      ? Array.from({ length: sourceLimit }, (_, index) => ids[Math.floor(index * (ids.length - 1) / Math.max(1, sourceLimit - 1))])
+      : ids;
+    for (const source of pathSources) {
+      const distances = new Map([[source, 0]]);
+      const queue = [source];
+      for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+        const current = queue[queueIndex];
+        for (const neighbor of adjacency.get(current)) {
+          if (distances.has(neighbor)) continue;
+          distances.set(neighbor, distances.get(current) + 1);
+          queue.push(neighbor);
+        }
+      }
+      const targets = sampledPaths ? ids : ids.slice(ids.indexOf(source) + 1);
+      for (const target of targets) {
+        const distance = distances.get(target);
+        if (distance === undefined) continue;
+        totalPathLength += distance;
+        pathPairs += 1;
+        diameter = Math.max(diameter, distance);
+      }
+    }
+    return {
+      bondCount,
+      bondKeys: allBondKeys,
+      bondKeysSampled: false,
+      bondDensity: Number((bondCount / Math.max(1, memberCount * (memberCount - 1) / 2)).toFixed(3)),
+      cycleRank: Math.max(0, bondCount - memberCount + 1),
+      bridgeCount: bridges.length,
+      bridgeBonds: bridges.map(([firstId, secondId]) => `${firstId}:${secondId}`),
+      articulationPointCount: articulationPoints.size,
+      leafCount: degrees.filter((degree) => degree === 1).length,
+      branchPointCount: degrees.filter((degree) => degree >= 3).length,
+      maximumDegree: Math.max(0, ...degrees),
+      diameter,
+      meanShortestPath: Number((totalPathLength / Math.max(1, pathPairs)).toFixed(3)),
+      pathMetricSampled: sampledPaths,
+      pathMetricSources: pathSources.length,
+      detailLevel: "full"
+    };
+  }
+
+  captureCollectiveCensus() {
+    const policy = this.config.collectiveWork.collectiveCensus;
+    if (!policy.enabled || this.simulationTicks % policy.cadenceTicks !== 0) return;
+    const organismsById = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const strongFacets = this.getFacets()
+      .filter((facet) => this.getFacetStrength(facet.memberIds) >= policy.minimumFacetStrength);
+    const groups = this.getBondGroups();
+    const groupIndexByMemberId = new Map();
+    groups.forEach((memberIds, groupIndex) => memberIds.forEach((id) => groupIndexByMemberId.set(id, groupIndex)));
+    const facetsByGroupIndex = new Map();
+    for (const facet of strongFacets) {
+      const groupIndex = groupIndexByMemberId.get(facet.memberIds[0]);
+      if (groupIndex === undefined) continue;
+      const facets = facetsByGroupIndex.get(groupIndex) ?? [];
+      facets.push(facet);
+      facetsByGroupIndex.set(groupIndex, facets);
+    }
+    const bondsByGroupIndex = new Map();
+    for (const bond of this.bonds.values()) {
+      const groupIndex = groupIndexByMemberId.get(bond.firstId);
+      if (groupIndex === undefined || groupIndex !== groupIndexByMemberId.get(bond.secondId)) continue;
+      const bonds = bondsByGroupIndex.get(groupIndex) ?? [];
+      bonds.push(bond);
+      bondsByGroupIndex.set(groupIndex, bonds);
+    }
+    const candidates = [];
+    for (const [groupIndex, memberIds] of groups.entries()) {
+      const members = memberIds.map((id) => organismsById.get(id)).filter(Boolean);
+      if (members.length !== memberIds.length) continue;
+      const facets = facetsByGroupIndex.get(groupIndex) ?? [];
+      if (!facets.length) continue;
+      const internalBonds = bondsByGroupIndex.get(groupIndex) ?? [];
+      const topology = this.getComponentTopologyMetrics(memberIds, { internalBonds, detailLevel: policy.detailLevel });
+      const xs = members.map((member) => member.x);
+      const ys = members.map((member) => member.y);
+      const xSpan = Math.max(...xs) - Math.min(...xs);
+      const ySpan = Math.max(...ys) - Math.min(...ys);
+      const assignedGateIds = [...new Set(facets.map((facet) => this.gateFacetAssignments.get(facet.key)).filter((id) => id !== undefined))];
+      const nearestGateDistance = this.workGates.length
+        ? Math.min(...this.workGates.map((gate) => average(members.map((member) => this.distanceToGate(member, gate)))))
+        : null;
+      const componentKey = this.componentLifecycleKey(memberIds);
+      const internalBondReserve = internalBonds.reduce((sum, bond) => sum + (bond.reserve ?? 0), 0);
+      const facetReserve = facets.reduce((sum, facet) => sum + (this.facetReserves.get(facet.key) ?? 0), 0);
+      candidates.push({
+        tick: this.simulationTicks,
+        snapshotComponentId: componentKey,
+        memberIds: [...memberIds].sort((first, second) => first - second),
+        memberParents: Object.fromEntries(members.map((member) => [member.id, member.parentId])),
+        memberLineageIds: [...new Set(members.map((member) => member.lineageId))].sort((first, second) => first - second),
+        memberCount: members.length,
+        centroid: { x: Number(average(xs).toFixed(2)), y: Number(average(ys).toFixed(2)) },
+        spatialExtent: { xSpan, ySpan, area: (xSpan + 1) * (ySpan + 1), elongation: Number((Math.max(xSpan, ySpan) / Math.max(1, Math.min(xSpan, ySpan))).toFixed(3)) },
+        strongFacetCount: facets.length,
+        strongFacetKeys: facets.map((facet) => facet.key),
+        topologySignature: `${members.length}:${topology.bondCount}:${facets.length}:${topology.cycleRank}:${topology.bridgeCount}:${topology.branchPointCount}`,
+        topology,
+        energy: Number(members.reduce((sum, member) => sum + member.energy, 0).toFixed(3)),
+        bondReserve: Number(internalBondReserve.toFixed(3)),
+        facetReserve: Number(facetReserve.toFixed(3)),
+        lifecycleState: this.componentLifecycle.get(componentKey)?.state ?? null,
+        transportMembers: members.filter((member) => member.collectiveTransportActive).length,
+        assignedGateIds,
+        nearestGateDistance: nearestGateDistance === null ? null : Number(nearestGateDistance.toFixed(3))
+      });
+    }
+    this.collectiveCensusRecords.push(...candidates);
+    this.matchCollectiveCensusCandidates(candidates);
+    if (this.collectiveCensusRecords.length > policy.maximumRecords) {
+      this.collectiveCensusRecords.splice(0, this.collectiveCensusRecords.length - policy.maximumRecords);
+    }
+  }
+
+  getCollectiveCensusDiagnostics() {
+    const latestTick = this.collectiveCensusRecords.at(-1)?.tick ?? null;
+    const latest = latestTick === null ? [] : this.collectiveCensusRecords.filter((record) => record.tick === latestTick);
+    return {
+      ...this.config.collectiveWork.collectiveCensus,
+      latestTick,
+      sampledComponentCount: latest.length,
+      totalRecords: this.collectiveCensusRecords.length,
+      latest,
+      recentRecords: this.collectiveCensusRecords.slice(-120)
+    };
+  }
+
+  setOverlap(firstValues, secondValues) {
+    const second = new Set(secondValues);
+    return firstValues.filter((value) => second.has(value)).length;
+  }
+
+  scoreCollectiveContinuity(previous, current) {
+    const policy = this.config.collectiveWork.collectiveLineageTracking;
+    const previousMembers = new Set(previous.memberIds);
+    const exactMembers = this.setOverlap(current.memberIds, previous.memberIds);
+    const descendantMembers = current.memberIds.filter((id) => {
+      const parentId = current.memberParents?.[id];
+      return parentId !== null && parentId !== undefined && previousMembers.has(parentId);
+    }).length;
+    const memberContinuity = Math.min(1, (exactMembers + descendantMembers) / Math.max(1, Math.min(previous.memberIds.length, current.memberIds.length)));
+    const bondContinuity = this.setOverlap(current.topology.bondKeys, previous.topology.bondKeys) / Math.max(1, Math.min(current.topology.bondKeys.length, previous.topology.bondKeys.length));
+    const facetContinuity = this.setOverlap(current.strongFacetKeys, previous.strongFacetKeys) / Math.max(1, Math.min(current.strongFacetKeys.length, previous.strongFacetKeys.length));
+    const centroidDistance = this.distanceBetweenPositions(previous.centroid, current.centroid);
+    const spatialContinuity = Math.max(0, 1 - centroidDistance / policy.spatialContinuityDistance);
+    const score = 0.55 * memberContinuity + 0.2 * bondContinuity + 0.15 * facetContinuity + 0.1 * spatialContinuity;
+    return {
+      score: Number(score.toFixed(3)),
+      exactMembers,
+      descendantMembers,
+      memberContinuity: Number(memberContinuity.toFixed(3)),
+      bondContinuity: Number(bondContinuity.toFixed(3)),
+      facetContinuity: Number(facetContinuity.toFixed(3)),
+      centroidDistance: Number(centroidDistance.toFixed(3)),
+      qualifies: score >= policy.minimumScore && memberContinuity >= policy.minimumMemberContinuity
+    };
+  }
+
+  recordCollectiveLineageEvent(event) {
+    this.collectiveLineageEvents.push(event);
+    const maximum = this.config.collectiveWork.collectiveLineageTracking.maximumEvents;
+    if (this.collectiveLineageEvents.length > maximum) this.collectiveLineageEvents.shift();
+  }
+
+  createCollectiveLineage(candidate, reason = "birth") {
+    const id = this.nextCollectiveLineageId++;
+    const lineage = {
+      id,
+      status: "active",
+      birthTick: candidate.tick,
+      endTick: null,
+      lastSeenTick: candidate.tick,
+      sampleCount: 1,
+      foundingMemberIds: [...candidate.memberIds],
+      currentMemberIds: [...candidate.memberIds],
+      maximumPopulation: candidate.memberCount,
+      maximumBonds: candidate.topology.bondCount,
+      maximumFacets: candidate.strongFacetCount,
+      memberTurnover: 0,
+      directDescendantRecruits: 0,
+      topologyChanges: 0,
+      distanceTravelled: 0,
+      migrationEvents: candidate.lifecycleState === "migrate" ? 1 : 0,
+      gateIds: new Set(candidate.assignedGateIds),
+      foundingMembersAlive: candidate.memberIds.length,
+      persistedAfterFoundersDied: false,
+      history: [{ ...candidate, continuity: null }]
+    };
+    this.collectiveLineages.set(id, lineage);
+    candidate.collectiveLineageId = id;
+    this.recordCollectiveLineageEvent({ tick: candidate.tick, type: reason, collectiveLineageId: id, snapshotComponentId: candidate.snapshotComponentId });
+    return lineage;
+  }
+
+  continueCollectiveLineage(lineage, previous, candidate, evidence) {
+    const previousMembers = new Set(previous.memberIds);
+    const currentMembers = new Set(candidate.memberIds);
+    const added = candidate.memberIds.filter((id) => !previousMembers.has(id));
+    const departed = previous.memberIds.filter((id) => !currentMembers.has(id));
+    const directDescendantRecruits = added.filter((id) => previousMembers.has(candidate.memberParents?.[id])).length;
+    lineage.status = "active";
+    lineage.lastSeenTick = candidate.tick;
+    lineage.sampleCount += 1;
+    lineage.currentMemberIds = [...candidate.memberIds];
+    lineage.maximumPopulation = Math.max(lineage.maximumPopulation, candidate.memberCount);
+    lineage.maximumBonds = Math.max(lineage.maximumBonds, candidate.topology.bondCount);
+    lineage.maximumFacets = Math.max(lineage.maximumFacets, candidate.strongFacetCount);
+    lineage.memberTurnover += added.length + departed.length;
+    lineage.directDescendantRecruits += directDescendantRecruits;
+    lineage.distanceTravelled = Number((lineage.distanceTravelled + evidence.centroidDistance).toFixed(3));
+    lineage.topologyChanges += previous.topologySignature === candidate.topologySignature ? 0 : 1;
+    lineage.migrationEvents += previous.lifecycleState !== "migrate" && candidate.lifecycleState === "migrate" ? 1 : 0;
+    candidate.assignedGateIds.forEach((gateId) => lineage.gateIds.add(gateId));
+    lineage.foundingMembersAlive = lineage.foundingMemberIds.filter((id) => this.organisms.some((organism) => organism.alive && organism.id === id)).length;
+    if (lineage.foundingMembersAlive === 0) lineage.persistedAfterFoundersDied = true;
+    lineage.history.push({ ...candidate, continuity: evidence });
+    const maximumHistory = this.config.collectiveWork.collectiveLineageTracking.maximumHistoryPerLineage;
+    if (lineage.history.length > maximumHistory) lineage.history.shift();
+    candidate.collectiveLineageId = lineage.id;
+    this.recordCollectiveLineageEvent({ tick: candidate.tick, type: "continuation", collectiveLineageId: lineage.id, snapshotComponentId: candidate.snapshotComponentId, evidence });
+  }
+
+  endCollectiveLineage(lineage, tick, reason) {
+    if (!lineage || lineage.status === "ended") return;
+    lineage.status = "ended";
+    lineage.endTick = tick;
+    this.recordCollectiveLineageEvent({ tick, type: reason, collectiveLineageId: lineage.id });
+  }
+
+  matchCollectiveCensusCandidates(candidates) {
+    const policy = this.config.collectiveWork.collectiveLineageTracking;
+    if (!policy.enabled) {
+      this.previousCollectiveCensusCandidates = candidates.map((candidate) => ({ ...candidate }));
+      return;
+    }
+    const previous = this.previousCollectiveCensusCandidates;
+    if (!previous.length) {
+      for (const candidate of candidates) this.createCollectiveLineage(candidate);
+      this.previousCollectiveCensusCandidates = candidates.map((candidate) => ({ ...candidate }));
+      return;
+    }
+    const qualifiedByCurrent = new Map(candidates.map((candidate) => [candidate.snapshotComponentId, []]));
+    const qualifiedByPrevious = new Map(previous.map((candidate) => [candidate.snapshotComponentId, []]));
+    const weakByCurrent = new Map(candidates.map((candidate) => [candidate.snapshotComponentId, []]));
+    for (const current of candidates) {
+      for (const prior of previous) {
+        const evidence = this.scoreCollectiveContinuity(prior, current);
+        if (evidence.qualifies) {
+          qualifiedByCurrent.get(current.snapshotComponentId).push({ prior, evidence });
+          qualifiedByPrevious.get(prior.snapshotComponentId).push({ current, evidence });
+        } else if (evidence.score >= policy.minimumScore * 0.65) {
+          weakByCurrent.get(current.snapshotComponentId).push({ prior, evidence });
+        }
+      }
+    }
+    const continuedPrevious = new Set();
+    for (const current of candidates) {
+      const matches = qualifiedByCurrent.get(current.snapshotComponentId);
+      const singleMatch = matches.length === 1 && qualifiedByPrevious.get(matches[0].prior.snapshotComponentId).length === 1;
+      if (singleMatch) {
+        const { prior, evidence } = matches[0];
+        const lineage = this.collectiveLineages.get(prior.collectiveLineageId);
+        if (lineage) {
+          this.continueCollectiveLineage(lineage, prior, current, evidence);
+          continuedPrevious.add(prior.snapshotComponentId);
+          continue;
+        }
+      }
+      const reason = matches.length > 1 ? "merge" : (weakByCurrent.get(current.snapshotComponentId).length ? "uncertain-birth" : "birth");
+      this.createCollectiveLineage(current, reason);
+      if (matches.length > 1) this.recordCollectiveLineageEvent({ tick: current.tick, type: "merge-ambiguous", collectiveLineageId: current.collectiveLineageId, sourceLineageIds: matches.map(({ prior }) => prior.collectiveLineageId) });
+    }
+    for (const prior of previous) {
+      if (continuedPrevious.has(prior.snapshotComponentId)) continue;
+      const descendants = qualifiedByPrevious.get(prior.snapshotComponentId);
+      const lineage = this.collectiveLineages.get(prior.collectiveLineageId);
+      this.endCollectiveLineage(lineage, candidates[0]?.tick ?? prior.tick, descendants.length > 1 ? "split-ambiguous" : "disappeared");
+    }
+    this.previousCollectiveCensusCandidates = candidates.map((candidate) => ({ ...candidate }));
+    if (this.collectiveLineages.size > policy.maximumLineages) {
+      const removable = [...this.collectiveLineages.values()]
+        .filter((lineage) => lineage.status === "ended")
+        .sort((first, second) => first.endTick - second.endTick);
+      while (this.collectiveLineages.size > policy.maximumLineages && removable.length) this.collectiveLineages.delete(removable.shift().id);
+    }
+  }
+
+  getCollectiveLineageDiagnostics() {
+    const lineages = [...this.collectiveLineages.values()];
+    const active = lineages.filter((lineage) => lineage.status === "active");
+    const ended = lineages.filter((lineage) => lineage.status === "ended");
+    return {
+      ...this.config.collectiveWork.collectiveLineageTracking,
+      totalLineages: lineages.length,
+      activeLineages: active.length,
+      endedLineages: ended.length,
+      persistedAfterFoundersDied: lineages.filter((lineage) => lineage.persistedAfterFoundersDied).length,
+      summaries: lineages.map((lineage) => ({
+        id: lineage.id,
+        status: lineage.status,
+        birthTick: lineage.birthTick,
+        endTick: lineage.endTick,
+        lastSeenTick: lineage.lastSeenTick,
+        lifetimeTicks: (lineage.endTick ?? this.simulationTicks) - lineage.birthTick,
+        sampleCount: lineage.sampleCount,
+        foundingMemberIds: lineage.foundingMemberIds,
+        foundingMembersAlive: lineage.foundingMembersAlive,
+        persistedAfterFoundersDied: lineage.persistedAfterFoundersDied,
+        maximumPopulation: lineage.maximumPopulation,
+        maximumBonds: lineage.maximumBonds,
+        maximumFacets: lineage.maximumFacets,
+        memberTurnover: lineage.memberTurnover,
+        directDescendantRecruits: lineage.directDescendantRecruits,
+        topologyChanges: lineage.topologyChanges,
+        distanceTravelled: lineage.distanceTravelled,
+        migrationEvents: lineage.migrationEvents,
+        gateIds: [...lineage.gateIds],
+        currentMemberIds: lineage.currentMemberIds,
+        recentHistory: lineage.history.slice(-8).map((sample) => ({
+          tick: sample.tick,
+          snapshotComponentId: sample.snapshotComponentId,
+          memberIds: sample.memberIds,
+          memberCount: sample.memberCount,
+          centroid: sample.centroid,
+          strongFacetCount: sample.strongFacetCount,
+          topologySignature: sample.topologySignature,
+          energy: sample.energy,
+          bondReserve: sample.bondReserve,
+          facetReserve: sample.facetReserve,
+          lifecycleState: sample.lifecycleState,
+          assignedGateIds: sample.assignedGateIds,
+          continuity: sample.continuity
+        }))
+      })),
+      recentEvents: this.collectiveLineageEvents.slice(-160)
+    };
   }
 
   getFacets() {
@@ -2923,6 +3349,9 @@ export class Simulation {
   }
 
   updateBonds() {
+    // Bond membership can change in this method. Calls elsewhere in the same
+    // tick can safely reuse one component decomposition after it completes.
+    this.bondGroupsCache = null;
     for (const bond of this.bonds.values()) {
       const reserveBeforeMaintenance = bond.reserve ?? this.config.bond.initialReserve;
       bond.reserve = Math.max(0, reserveBeforeMaintenance - this.config.bond.maintenancePerTick);
@@ -2949,8 +3378,8 @@ export class Simulation {
       const component = [];
       const queue = [candidate.id];
       visited.add(candidate.id);
-      while (queue.length) {
-        const id = queue.shift();
+      for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+        const id = queue[queueIndex];
         component.push(id);
         for (const neighborId of neighbors.get(id) ?? []) {
           if (!visited.has(neighborId)) {
@@ -3009,6 +3438,7 @@ export class Simulation {
       }
     }
     this.removeInvalidBonds();
+    this.bondGroupsCache = null;
   }
 
   removeInvalidBonds() {
@@ -3060,6 +3490,16 @@ export class Simulation {
 
   setFacetTrailEnabled(enabled) {
     this.facetTrailEnabled = Boolean(enabled);
+  }
+
+  setHeadlessObservationMode(enabled) {
+    this.headlessObservationMode = Boolean(enabled);
+    if (this.headlessObservationMode) {
+      this.birthMarkers = [];
+      this.deathMarkers = [];
+      this.energyTransfers = [];
+      this.primaryProductionMarkers = [];
+    }
   }
 
   setEnvironmentMemoryVisualizationEnabled(enabled) {
@@ -3219,6 +3659,8 @@ export class Simulation {
         captureDiagnostics: this.getGateCaptureDiagnostics(),
         cycleDiagnostics: this.getGateFieldCycleDiagnostics(),
         componentEpisodeDiagnostics: this.getComponentEpisodeDiagnostics(),
+        collectiveCensus: this.getCollectiveCensusDiagnostics(),
+        collectiveLineages: this.getCollectiveLineageDiagnostics(),
         harvestingLineages: [...this.collectiveWorkHarvestLineages.values()].sort((first, second) => second.harvests - first.harvests),
         gates: this.workGates.map((gate) => ({
           id: gate.id,

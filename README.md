@@ -2,7 +2,31 @@
 
 Primes, also called Project Genesis, is a long-term Artificial Life research project built around a server-driven simulation engine. Its central hypothesis is that prime factorization can serve as a canonical language for generation: a prime represents one irreducible generator, while a composite represents their composition.
 
-Phase 14 adds distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.
+## Current research state — Phase 16 Energy Logistics
+
+Project Genesis now has a functioning structural ecology: organisms can form bonds, closed triangular facets, larger bonded components, complete consensus gates, harvest physical gate-field food, and migrate between finite gate opportunities. The current research question is no longer whether visible structure can form. It is whether a **collective** can persist as an identifiable entity across energy cycles, migration, and member turnover.
+
+Current live demonstrations use seed `160103`. They enable bounded component lifecycle (`harvest → conserve → migrate`) and bounded migrating-component transport. These are experimental mechanisms, not claims of long-horizon stability. They create no energy, food, global target, or teleportation; transport reduces only the existing movement charge of a coherent strong bonded component travelling toward a locally sensed gate.
+
+The principal empirical findings so far are:
+
+- finite individual energy storage was a genuine bottleneck, but removing storage overflow alone did not create persistence;
+- gate-centred collective work is survival-critical in the resource-limited task ecology;
+- components can form, migrate, and repeatedly exploit gates, but migration remains the dominant energy leak;
+- transport improves short-horizon component energy retention and structural richness, while requiring longer replicated persistence tests;
+- cumulative facet-work heatmaps show gate-centred structural-work regions distinct from ordinary food-bearing foraging space.
+
+The research record is maintained in:
+
+- `PHASE_16_ENERGY_LOGISTICS.md` — protocols, causal results, and interpretation constraints;
+- `RESEARCHER_UPDATE_ENERGY_LOGISTICS.md` — concise researcher-facing summary;
+- `NEXT_SESSION_HANDOFF.md` — the next instrumentation phase: longitudinal collective identity and morphology analysis.
+
+The first measurement layers are now active: every 20 ticks, the server records raw topology and economics for each strong-facet bonded component—members, bonds, facets, density, cycles, bridge fragility, branching, spatial extent, energy, reserves, and gate context—then conservatively links only unambiguous consecutive samples using member/direct-descendant continuity plus bond, facet, and spatial evidence. The next planned work is replicated longer longitudinal analysis asking whether any collective outlives the organisms that founded it. No new biological mechanism is required for that question.
+
+## Historical foundations: Phases 13–15.5
+
+Phase 14 added distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.
 
 Structural homeostasis makes the world energy budget inspectable. Fertility-driven food regrowth is recorded as primary productivity, while bonds can return a small, lossy reserve transfer to an attached low-energy member. Bonds store and redistribute existing energy; they never create it.
 
@@ -63,7 +87,7 @@ The current ecology experiment deliberately avoids terrain. All four conditions 
 
 This design makes the causal claim testable: if maintained facets are ecologically necessary, scarce-maintained runs should retain more structural lineages, active bonds, and refinery/niche activity than the matched maintenance-disabled control. It does **not** assume the result; the lab records extinctions and failed invasions too.
 
-## Phase 7 goals
+## Foundational Phase 7 goals
 
 - Establish a clean simulation engine with clear module boundaries.
 - Construct the running physics configuration from a factorized world number.
@@ -127,7 +151,7 @@ This keeps the architecture aligned with future deployment, persistence, and mul
 - `POST /api/control`: control actions such as `pause`, `resume`, `step`, `reset`, and `randomize`.
 - `POST /api/settings`: update speed, food growth rate, initial population, or grid visibility.
 
-## Phase 7 behavior
+## Foundational Phase 7 behavior
 
 - World size: `64 x 64`
 - Tiles: `EMPTY`, `FOOD`, `WALL`

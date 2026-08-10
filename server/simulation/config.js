@@ -200,6 +200,32 @@ export const BASE_CONFIG = {
       minimumMembers: 3,
       minimumFacetStrength: 0.7
     },
+    collectiveCensus: {
+      // Observation only: samples raw component topology and economics before
+      // any longitudinal identity matching is introduced.
+      enabled: true,
+      cadenceTicks: 20,
+      maximumRecords: 1200,
+      minimumFacetStrength: 0.7,
+      // The browser uses full topology. Headless longitudinal batches can
+      // request lightweight evidence without changing the simulated world.
+      detailLevel: "full",
+      lightweightBondSampleLimit: 64,
+      // Exact all-pairs paths become needlessly expensive in very large
+      // components. Larger components use a deterministic sample of sources.
+      topologyPathSourceLimit: 48
+    },
+    collectiveLineageTracking: {
+      // Observation only: conservative matching of consecutive census samples.
+      // Ambiguous split/merge evidence never becomes a forced continuation.
+      enabled: true,
+      minimumScore: 0.62,
+      minimumMemberContinuity: 0.5,
+      spatialContinuityDistance: 12,
+      maximumLineages: 500,
+      maximumEvents: 1000,
+      maximumHistoryPerLineage: 120
+    },
     // Food is produced at the three visible gate ports while the responsible facet remains intact.
     // "diffuse" is retained only as the matched experimental control.
     gateOutputMode: "port-coupled"

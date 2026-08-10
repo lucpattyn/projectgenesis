@@ -95,6 +95,20 @@ With bounded lifecycle and migration transport enabled for visual observation, t
 
 This observation is **qualitative only**. A canvas image cannot establish duration, lineage diversity, causality, or long-term stability. It should be treated as a useful visual hypothesis for the next replicated, instrumented long-run experiment—not as confirmation that the persistence problem is solved.
 
+## Internal test of apparent empty regions
+
+The dark areas of the structural-work heatmap were tested quantitatively in two independent 500-tick seeded worlds (`160103`, `160104`). Cells with no cumulative facet work were compared with historically worked cells.
+
+| Mean across both seeds | Zero-trail cells | Worked cells |
+| --- | ---: | ---: |
+| Mean distance to nearest gate | **14.49** | 9.76 |
+| Within gate-sensing range | 55.0% | **74.3%** |
+| Current food occupancy | **17.7%** | 12.8% |
+
+The result replicated: low-work regions are farther from gates but retain more food. Thus they are not simply empty, depleted, or inaccessible territory. They appear to be ordinary-foraging space that is not profitable enough for sustained collective structural work. This is preliminary evidence for an emergent spatial niche distinction: gate-centered productive structural zones versus food-bearing but structurally underused regions.
+
+This does not yet prove permanent niche boundaries. The next stronger test would relocate gates or observe the same regions over longer time windows and ask whether the work landscape reorganizes predictably.
+
 ## Current limitations
 
 1. Migration remains net-negative over a complete episode.
@@ -113,3 +127,37 @@ The criterion for success is:
 > Migration loss per unit distance declines, components arrive with usable reserve, and component persistence improves without shifting the deficit into harvest or arrival.
 
 Only after that result should the project revisit protected-surplus structural reproduction or periodic intelligence probes.
+
+## Next measurement layer: collective identity and morphology
+
+The next planned phase adds no new ecological mechanism. It will track bonded collectives over time despite member replacement, bond turnover, migration, and topology change. The central question is whether a collective can outlive its founding organisms.
+
+The tracker will also measure morphology rather than infer it visually: density, triangle/cycle richness, bridge bonds, branching, spatial extent, and transport/maintenance economics. This permits testable claims such as “dense meshes are more disruption-tolerant but more expensive,” rather than treating a shape as an intrinsic biological label.
+
+The first audit-only census layer is now implemented. It samples every strong-facet bonded component every 20 ticks and has already distinguished, in a seeded 250-tick run, a dense 12-member mesh with 40 bonds and no bridge bonds from a four-member triangle-plus-appendage with one bridge bond and a compact three-member facet. This validates that morphology can be measured as topology before any collective identity or adaptive meaning is assigned to it.
+
+The second layer now conservatively links unambiguous consecutive census samples into collective-lineage candidates. In the first 250-tick audit, one candidate persisted for 150 ticks while changing membership 28 times, recruiting 12 direct descendants, changing topology seven times, and migrating three times. Four founders were still alive at the final sample; this validates the tracker but does not yet establish a collective that outlived its founders. Split and merge ambiguity is recorded rather than silently resolved.
+## Replicated collective-continuity baseline (2026-08-10)
+
+We have added a conservative lineage instrument for strong-facet components. It
+uses member and direct-offspring continuity, shared bonds/facets, and bounded
+centroid motion; it does not force an identity through ambiguous split or merge
+events.
+
+Two 500-tick baseline worlds yielded 12 and 9 candidate collective lineages.
+Their longest-lived candidates persisted for 240 and 260 ticks, respectively,
+while gaining and losing members, changing topology, migrating three times, and
+visiting multiple gates. The first reached 17 members, 45 bonds, and 47 strong
+facets; the second reached 14, 38, and 44.
+
+This is an important but limited result: Genesis now has measured examples of
+collectives with continuity beyond a static cluster. It has **not** yet shown a
+collective remaining recognizable after every founder has died. That is the next
+threshold to test, not a claim we should make prematurely.
+## Scalable 2,000-tick collective test (2026-08-10)
+
+We separated long research runs from the canvas. A headless batch runner now keeps all ecological rules intact but omits visual-only markers and uses compact, coarse lineage observation. This made an isolated 2,000-tick run feasible without a live browser simulation competing for resources.
+
+Two seeds completed. Seed 160103 ended with a thriving population of 264 and contained 29 candidate collective lineages; its longest lasted 400 ticks, travelled 41.31 cells, changed membership 14 times, and recruited three direct descendants. Seed 160104 produced an even longer 500-tick lineage which migrated, changed membership 12 times, recruited four direct descendants, and visited gates 4 and 6, but the world later declined to eight organisms with no bonds.
+
+Neither world showed founder-independent persistence. This is not a negative result disguised as a positive one: we have now made the test repeatable at the relevant horizon and narrowed the scientific boundary. The system supports durable, changing collectives, but has not yet demonstrated a collective identity surviving full founder turnover.

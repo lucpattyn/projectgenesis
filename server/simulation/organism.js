@@ -19,6 +19,7 @@ export class Organism {
     y,
     generation = 1,
     lineageId = id,
+    parentId = null,
     energy = DEFAULT_CONFIG.organism.startingEnergy,
     age = 0,
     genomeProfile,
@@ -38,6 +39,7 @@ export class Organism {
     this.age = age;
     this.generation = generation;
     this.lineageId = lineageId;
+    this.parentId = parentId;
     this.genome = genomeProfile.genome;
     this.genomeProfile = genomeProfile;
     this.brain = brain;
@@ -329,6 +331,7 @@ export class Organism {
       y: childPosition.y,
       generation: this.generation + 1,
       lineageId: this.lineageId,
+      parentId: this.id,
       energy: sharedEnergy,
       genomeProfile: childGenomeProfile,
       brain: brainGenerator.generate(childGenomeProfile),
@@ -349,6 +352,7 @@ export class Organism {
       age: this.age,
       generation: this.generation,
       lineageId: this.lineageId,
+      parentId: this.parentId,
       genome: this.genome,
       genomeDecimal: this.genomeProfile.number,
       genomeExpression: this.genomeProfile.expression,
