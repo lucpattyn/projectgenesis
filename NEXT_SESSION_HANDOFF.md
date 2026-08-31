@@ -2,6 +2,77 @@
 
 **Read this file first when resuming.** It records the actual current state and the next scientific question; it is not a feature wish list.
 
+## Tomorrow restart — topology-native persistence work (2026-08-31)
+
+### Exact baseline and repository state
+
+- Start from the current committed `main` tip: **`1fe7c8e`** — `feat: prioritize member survival in component reserves`.
+- The immediate predecessor is **`d767402`** — `feat: add topology-native pulse and motif memory`.
+- The clean formation reference remains **`18866dc`**. Do not reset to it; it is the historical control, while the current commits are the working continuation.
+- Default live seed: **`160103`**. World number: **`85470`**.
+- Before editing, run `git status --short`, read this section, then run `npm test`.
+- Do not restore old research stashes or reactivate the older coordinate-based collective-memory / surplus-first mechanisms. They remain controls, not the active design.
+
+### Current mechanism switches
+
+- `bond.componentReserveEconomy.enabled`: **true**.
+- `bond.componentReserveEconomy.commitmentEnabled`: **true**.
+- `bond.collectiveMemory.enabled`: **false** (old location-attraction memory control).
+- `bond.surplusFirstEnergy.enabled`: **false** (old control).
+- `bond.topologyMemory.enabled`: **false** by default; use it only in matched headless experiments until further evidence supports a live default.
+
+### What has been implemented
+
+1. Component reserves are capped and funded only from real harvest surplus after the source's reproduction floor.
+2. Reserve routing is now survival-first: **source survival → protected reproduction slice → weakest-member support → bond maintenance**.
+3. Existing adjacent bonds can bridge short binding-drive dips only with usable local reserve and safe members.
+4. The switchable topology-memory layer derives terminal, hub, interior, and cyclic-core roles from the live graph. It does not whitelist pentagons, diamonds, stars, or world coordinates.
+5. Food return, gate completion, productive migration, member support, and reproduction emit attenuated pulses through existing bonds. Repeated useful topology signatures can consolidate into bounded motif traces.
+6. Structural reproduction can use real component reserve only when the component is stable and adequately funded; inheritance carries only a capped/noisy local trace.
+7. Diagnostics expose reserve deposits, member support, bond funding, topology roles, motif count, consolidation, and traces in the bonding snapshot.
+
+### Measured evidence — do not overstate it
+
+All results below are deterministic single-seed screens at seed `160103`, not replicated scientific conclusions.
+
+| Screen | Memory off | Topology memory on | Interpretation |
+| --- | ---: | ---: | --- |
+| 800 ticks, final population | 29 | **38** | More members survived with the layer on. |
+| 800 ticks, final bonds | 29 | **55** | More structure remained. |
+| 800 ticks, final facets | 20 | **37** | Rich morphology persisted better. |
+| 800 ticks, energy-exhaustion deaths | 131 | **82** | Survival-first routing reduced starvation. |
+| 1,500 ticks, final population | 8 | **12** | Improvement remained, but both worlds declined. |
+| 1,500 ticks, final bonds/facets | 0 / 0 | **8 / 2** | The enabled world retained one small component. |
+| 1,500 ticks, energy-exhaustion deaths | 172 | **136** | Improvement, not resolution. |
+
+At 1,500 ticks the topology-memory run still had 147 binding-loss breaks and 137 maximum-age deaths. The next bottleneck is late replacement and energy acquisition, not initial structure formation.
+
+### Safe next design — implement and test in this order
+
+Do not introduce free energy, privileged shape names, global targets, teleportation, or remembered coordinates. Every rule below must use current adjacency, local sensing, actual energy, graph role, and bounded trace.
+
+1. **Core–scout energy separation.** Define core edges as non-bridge cyclic edges, trunk edges as bridges between substantial subgraphs, and tail edges as degree-one terminal bridges. Start with a *tethered* scout, not a free rover: one terminal attached to a cyclic core may make short individual moves while retaining a strict adjacency leash, time limit, and energy-return floor.
+2. **Return-path rewards.** Record `departure → exploration → value → return` for the tethered scout. Only a food return, useful gate signal, or productive local discovery followed by return may emit a stronger pulse into the tail attachment and connected core. The reward is trace/commitment only; harvested energy still follows the survival-first budget.
+3. **Reserve-funded reproduction before old-age collapse.** Permit a stable cyclic component to initiate a local structural birth before its members age out, but only with all core members above the support floor, real post-birth reserve, a local open site, and a cooldown. Spend real parent energy and reserve; inherit only capped/noisy local trace.
+4. **Graceful edge shedding.** Under energy stress, release an unproductive tail edge before risking a cyclic core. Require a starving terminal, failed support, no recent successful-return trace, and intact remaining core. Return only a lossy fraction of the released edge's real reserve to the attached component or terminal.
+5. **Maintenance scaling by topology.** Allocate maintenance after member support in this order: core-cycle edges, recently successful return paths, trunk edges, then ordinary tails. This is graph-derived; it is not a pentagon or triangle whitelist.
+6. **Local reserve recycling.** When a member dies or a tail is shed, recover only a bounded lossy fraction of its existing bond reserve / stored recoverable energy into nearby component reserve or physical local residue. Do not create energy and do not make dead members a global subsidy.
+7. **Re-seeding test.** Run seeds `160103–160105` for 2,000 ticks after each isolated intervention. Report final surviving components, longest cyclic-core lifetime, births before age death, starvation deaths, tail releases, successful scout returns, reserve inflow/outflow, and reproduction timing. Compare each step against the current commit with `bond.topologyMemory` both off and on.
+
+### Recommended first task tomorrow
+
+Implement only **tethered scout eligibility plus episode diagnostics** first. Do not yet change energy allocation, reproduction, or edge removal. Verify that a terminal can perform bounded local exploration without breaking its attachment or altering ecology when no eligible core exists. Then add return-path pulses in a separate commit and run the first matched 800-tick screen.
+
+### Useful commands
+
+```powershell
+git status --short
+npm test
+node server/index.js
+```
+
+For headless screens, stop the live server first. Use seed `160103` as the quick visual/mechanism reference, then use `160103–160105` for comparative evidence. Keep headless results out of tracked files unless they are a deliberate, documented research artifact.
+
 ## Where we are
 
 Phase 16 moved from energy accounting into **energy logistics**: whether strong bonded facets can locate, solve, and benefit from finite computational opportunities.
