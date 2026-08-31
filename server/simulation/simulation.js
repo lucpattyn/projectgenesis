@@ -424,6 +424,11 @@ export class Simulation {
     const scores = Object.fromEntries(DIRECTIONS.map((direction) => [direction.name, 0]));
     const memory = organism?.memoryLocation;
     if (!policy?.enabled || !memory || organism.memoryRepeats < policy.consolidationThreshold || organism.nodeTrace < policy.reinforcementStrength) return scores;
+    if (organism.memoryEvent === "food" && this.world.tiles[memory.y]?.[memory.x]?.type !== TILE_TYPES.FOOD) return scores;
+    if (organism.memoryEvent === "gate" || organism.memoryEvent === "migration") {
+      const gate = this.workGates.find((candidate) => candidate.x === memory.x && candidate.y === memory.y && !candidate.exhausted);
+      if (!gate) return scores;
+    }
     const before = this.distanceBetweenPositions(organism, memory);
     for (const direction of DIRECTIONS) {
       const target = this.world.wrapPosition(organism.x + direction.x, organism.y + direction.y);
