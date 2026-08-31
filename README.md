@@ -24,6 +24,16 @@ The research record is maintained in:
 
 The first measurement layers are now active: every 20 ticks, the server records raw topology and economics for each strong-facet bonded component—members, bonds, facets, density, cycles, bridge fragility, branching, spatial extent, energy, reserves, and gate context—then conservatively links only unambiguous consecutive samples using member/direct-descendant continuity plus bond, facet, and spatial evidence. The next planned work is replicated longer longitudinal analysis asking whether any collective outlives the organisms that founded it. No new biological mechanism is required for that question.
 
+## Topology-native pulse and motif memory
+
+The topology-native memory layer is an opt-in research mechanism (`bond.topologyMemory.enabled`, currently `false`). It preserves the baseline formation rules and does not use remembered world coordinates or privileged shapes. Live degree determines roles: degree-one terminals can explore, degree-three-or-higher nodes can relay, and non-terminal members of cyclic components are structural cores.
+
+Useful outcomes—food return, gate completion, productive migration, member support, and reproduction—share the existing bounded pulse path. A pulse attenuates across the component's current bonds and reinforces only the nodes and edges it reaches. Traces decay continuously. Component reserves remain the only energy source: they are capped, protect source survival and reproduction first, then support members and weak bond reserves.
+
+When enabled, the server also records topology signatures made from component size, bond count, cycle rank, and degree sequence. Repeated successful pulses consolidate a signature into a motif trace; a five-node ring can therefore become a learned memory without any pentagon whitelist. Consolidated motifs may modestly protect an existing adjacent edge and qualify a stable, surplus-bearing component for structural reproduction. They cannot create edges, create energy, prevent separation, or make a bond immortal. Newborns inherit only a capped, noisy fraction of local node trace.
+
+The layer is intentionally measured against the same seed and tick horizon with the switch off and on before changing live defaults. Diagnostics expose role counts, motif counts, consolidation, topology traces, pulse paths, and reserve throughput in the bonding snapshot.
+
 ## Historical foundations: Phases 13–15.5
 
 Phase 14 added distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.

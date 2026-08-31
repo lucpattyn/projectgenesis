@@ -56,6 +56,9 @@ export class Simulation {
     this.componentReserveWithdrawn = 0;
     this.collectiveMemoryLocations = [];
     this.collectiveMemorySuccesses = new Map();
+    this.topologyMotifs = new Map();
+    this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
+    this.topologyStableTicks = new Map();
     this.bondGroupsCache = null;
     this.bondCandidates = new Map();
     this.structuralBirthSeeds = new Map();
@@ -383,8 +386,97 @@ export class Simulation {
     return new Set(facet.memberIds);
   }
 
+  getTopologyRoleMap() {
+    const adjacency = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, new Set()]));
+    for (const bond of this.bonds.values()) {
+      if (adjacency.has(bond.firstId) && adjacency.has(bond.secondId)) {
+        adjacency.get(bond.firstId).add(bond.secondId);
+        adjacency.get(bond.secondId).add(bond.firstId);
+      }
+    }
+    const roles = new Map();
+    for (const [id, neighbors] of adjacency) {
+      const degree = neighbors.size;
+      roles.set(id, degree <= 1 ? "terminal" : degree >= 3 ? "hub" : "interior");
+    }
+    for (const group of this.getBondGroups()) {
+      const internalBonds = [...this.bonds.values()].filter((bond) => group.includes(bond.firstId) && group.includes(bond.secondId));
+      if (internalBonds.length >= group.length) {
+        for (const id of group) if (roles.get(id) !== "terminal") roles.set(id, "core");
+      }
+    }
+    this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
+    for (const role of roles.values()) this.topologyRoleCounts[role] += 1;
+    return roles;
+  }
+
+  getTopologyMotifSignature(memberIds) {
+    const ids = [...memberIds].sort((a, b) => a - b);
+    const idSet = new Set(ids);
+    const degrees = new Map(ids.map((id) => [id, 0]));
+    let bondCount = 0;
+    for (const bond of this.bonds.values()) {
+      if (!idSet.has(bond.firstId) || !idSet.has(bond.secondId)) continue;
+      bondCount += 1;
+      degrees.set(bond.firstId, degrees.get(bond.firstId) + 1);
+      degrees.set(bond.secondId, degrees.get(bond.secondId) + 1);
+    }
+    const cycleRank = Math.max(0, bondCount - ids.length + 1);
+    return `${ids.length}|${bondCount}|${cycleRank}|${[...degrees.values()].sort((a, b) => a - b).join(",")}`;
+  }
+
+  recordTopologyPulse(source, event, strength, distance) {
+    const policy = this.config.bond.topologyMemory;
+    if (!policy?.enabled) return;
+    const group = this.getBondGroups().find((memberIds) => memberIds.includes(source.id));
+    if (!group || group.length < 3) return;
+    const signature = this.getTopologyMotifSignature(group);
+    let motif = this.topologyMotifs.get(signature);
+    if (!motif) {
+      if (this.topologyMotifs.size >= policy.maximumMotifs) {
+        const oldest = [...this.topologyMotifs.entries()].sort((a, b) => a[1].lastSuccessTick - b[1].lastSuccessTick)[0];
+        if (oldest) this.topologyMotifs.delete(oldest[0]);
+      }
+      motif = { signature, trace: 0, successes: 0, lastSuccessTick: this.simulationTicks, lastEvent: event, memberCount: group.length };
+      this.topologyMotifs.set(signature, motif);
+    }
+    motif.trace = Math.min(policy.maximumTrace, motif.trace + strength * policy.motifReinforcement);
+    motif.successes += 1;
+    motif.lastSuccessTick = this.simulationTicks;
+    motif.lastEvent = event;
+    const groupSet = new Set(group);
+    for (const bond of this.bonds.values()) {
+      if (!groupSet.has(bond.firstId) || !groupSet.has(bond.secondId)) continue;
+      const hops = Math.min(distance.get(bond.firstId) ?? Infinity, distance.get(bond.secondId) ?? Infinity);
+      if (!Number.isFinite(hops)) continue;
+      bond.topologyTrace = Math.min(policy.maximumTrace, (bond.topologyTrace ?? 0)
+        + strength * policy.reinforcementStrength * Math.pow(policy.pulseAttenuationPerHop, hops));
+      bond.topologyLastPulseTick = this.simulationTicks;
+    }
+  }
+
+  updateTopologyMemory() {
+    const policy = this.config.bond.topologyMemory;
+    if (!policy?.enabled) return;
+    const activeSignatures = new Set();
+    for (const group of this.getBondGroups()) {
+      if (group.length < 3) continue;
+      const signature = this.getTopologyMotifSignature(group);
+      activeSignatures.add(signature);
+      this.topologyStableTicks.set(signature, (this.topologyStableTicks.get(signature) ?? 0) + 1);
+    }
+    for (const [signature, motif] of this.topologyMotifs) {
+      motif.trace *= policy.motifForgettingRate;
+      if (!activeSignatures.has(signature) && motif.trace < 0.01) this.topologyMotifs.delete(signature);
+    }
+    for (const bond of this.bonds.values()) bond.topologyTrace = (bond.topologyTrace ?? 0) * policy.traceDecayRate;
+    this.getTopologyRoleMap();
+  }
+
   emitCollectivePulse(source, event, strength = 1, context = {}) {
-    const policy = this.config.bond.collectiveMemory;
+    const memoryPolicy = this.config.bond.collectiveMemory;
+    const topologyPolicy = this.config.bond.topologyMemory;
+    const policy = memoryPolicy?.enabled ? memoryPolicy : topologyPolicy;
     if (!policy?.enabled || !source?.alive || strength <= 0) return;
     const distance = new Map([[source.id, 0]]); const queue = [source.id];
     while (queue.length) {
@@ -420,13 +512,18 @@ export class Simulation {
     }
     this.collectiveMemoryLocations.push({ x: context.x ?? source.x, y: context.y ?? source.y, event, repeats, tick: this.simulationTicks });
     if (this.collectiveMemoryLocations.length > policy.maximumLocationRecords) this.collectiveMemoryLocations.shift();
+    this.recordTopologyPulse(source, event, strength, distance);
   }
 
   decayCollectiveMemory() {
     const policy = this.config.bond.collectiveMemory;
-    if (!policy?.enabled) return;
+    if (!policy?.enabled) {
+      this.updateTopologyMemory();
+      return;
+    }
     for (const organism of this.organisms) organism.nodeTrace *= policy.traceDecayRate;
     for (const bond of this.bonds.values()) bond.bondTrace = (bond.bondTrace ?? 0) * policy.traceDecayRate;
+    this.updateTopologyMemory();
   }
 
   getMemoryDirectionScores(organism) {
@@ -445,6 +542,19 @@ export class Simulation {
       if (this.distanceBetweenPositions(target, memory) < before) scores[direction.name] = policy.maximumMovementBias * organism.nodeTrace;
     }
     return scores;
+  }
+
+  qualifiesTopologyReproduction(organism) {
+    const policy = this.config.bond.topologyMemory;
+    if (!policy?.enabled) return true;
+    const group = this.getBondGroups().find((memberIds) => memberIds.includes(organism.id));
+    if (!group || group.length < 3) return false;
+    const reserve = this.componentReserves.get(this.componentReserveKey(group)) ?? 0;
+    const signature = this.getTopologyMotifSignature(group);
+    const motif = this.topologyMotifs.get(signature);
+    return reserve >= policy.reproductionReserve
+      && (this.topologyStableTicks.get(signature) ?? 0) >= policy.stableTicksRequired
+      && (motif?.trace ?? 0) >= policy.motifConsolidationThreshold;
   }
 
   handleReproduction() {
@@ -469,12 +579,29 @@ export class Simulation {
       if (!childPosition) {
         continue;
       }
+      if (structuralParent && this.config.bond.topologyMemory.enabled) {
+        const memoryPolicy = this.config.bond.topologyMemory;
+        const group = this.getBondGroups().find((memberIds) => memberIds.includes(organism.id));
+        const reserveKey = group && this.componentReserveKey(group);
+        const reserve = reserveKey ? (this.componentReserves.get(reserveKey) ?? 0) : 0;
+        const release = Math.min(memoryPolicy.reproductionReserve, reserve);
+        if (release > 0) {
+          this.componentReserves.set(reserveKey, reserve - release);
+          organism.energy += release;
+          this.componentReserveWithdrawn += release;
+        }
+      }
 
       const child = organism.reproduce(this.nextOrganismId, childPosition, this.config.organism, {
         genomeEngine: this.genomeEngine,
         brainGenerator: this.brainGenerator,
         mutationEngine: this.mutationEngine
       });
+      if (this.config.bond.topologyMemory.enabled) {
+        const memoryPolicy = this.config.bond.topologyMemory;
+        child.nodeTrace = Math.max(0, Math.min(memoryPolicy.maximumTrace, organism.nodeTrace * memoryPolicy.inheritanceFraction
+          + (organism.random() - 0.5) * memoryPolicy.inheritanceNoise));
+      }
       // This is a transfer into a new organism, not energy destroyed by reproduction.
       this.energyEconomics.allocations.reproduction += child.energy;
       if (!this.lineageBirthTicks.has(child.lineageId)) this.lineageBirthTicks.set(child.lineageId, this.simulationTicks);
@@ -483,7 +610,9 @@ export class Simulation {
       this.lastOrdinaryReproductionParents.add(organism.id);
       occupied.add(`${childPosition.x},${childPosition.y}`);
       this.births += 1;
-      if (this.config.bond.collectiveMemory.enabled) this.emitCollectivePulse(organism, "reproduction", 0.75, childPosition);
+      if (this.config.bond.collectiveMemory.enabled || this.config.bond.topologyMemory.enabled) {
+        this.emitCollectivePulse(organism, "reproduction", 0.75, childPosition);
+      }
       this.birthMarkers.push({
         x: childPosition.x,
         y: childPosition.y,
@@ -610,6 +739,8 @@ export class Simulation {
         continue;
       }
       const members = facet.memberIds.map((id) => byId.get(id)).filter(Boolean);
+      if (this.config.bond.topologyMemory.enabled
+        && !this.qualifiesTopologyReproduction(members[0])) continue;
       const parent = members
         .filter((member) => !usedParents.has(member.id) && member.energy >= policy.memberEnergyFloor)
         .sort((first, second) => second.energy - first.energy)[0];
@@ -622,6 +753,11 @@ export class Simulation {
         brainGenerator: this.brainGenerator,
         mutationEngine: this.mutationEngine
       });
+      if (this.config.bond.topologyMemory.enabled) {
+        const memoryPolicy = this.config.bond.topologyMemory;
+        child.nodeTrace = Math.max(0, Math.min(memoryPolicy.maximumTrace, parent.nodeTrace * memoryPolicy.inheritanceFraction
+          + (parent.random() - 0.5) * memoryPolicy.inheritanceNoise));
+      }
       const investment = Math.min(this.config.facet.reserveInvestmentPerBirth, reserve);
       this.facetReserves.set(facet.key, reserve - investment);
       this.seedStructuralBond(parent.id, child.id, investment / 2);
@@ -1192,6 +1328,9 @@ export class Simulation {
     this.componentReserveWithdrawn = 0;
     this.collectiveMemoryLocations = [];
     this.collectiveMemorySuccesses.clear();
+    this.topologyMotifs.clear();
+    this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
+    this.topologyStableTicks.clear();
     this.bondGroupsCache = null;
     this.bondCandidates.clear();
     this.structuralBirthSeeds.clear();
@@ -3592,6 +3731,8 @@ export class Simulation {
           reserve: Math.min(this.config.bond.reserveCapacity, this.config.bond.initialReserve + seedEnergy),
           bondTrace: 0,
           componentCommitment: 0,
+          topologyTrace: 0,
+          topologyLastPulseTick: null,
           lastPulseTick: null,
           lastPulseEvent: null,
           inherited: this.structuralBirthSeeds.has(key)
@@ -3604,10 +3745,27 @@ export class Simulation {
     // Maintenance only: a local reserve can retain an existing adjacent edge
     // through a brief loss of bind drive, but it cannot form an extra edge.
     if (componentReservePolicy?.enabled && componentReservePolicy.commitmentEnabled) {
+      const topologyPolicy = this.config.bond.topologyMemory;
+      const consolidatedSignatures = topologyPolicy?.enabled
+        ? new Set([...this.topologyMotifs.values()]
+          .filter((motif) => motif.trace >= topologyPolicy.motifConsolidationThreshold
+            && (this.topologyStableTicks.get(motif.signature) ?? 0) >= topologyPolicy.stableTicksRequired)
+          .map((motif) => motif.signature))
+        : new Set();
       for (const [key, bond] of this.bonds) {
         const first = byId.get(bond.firstId);
         const second = byId.get(bond.secondId);
-        const isRecentlySupported = (bond.componentCommitment ?? 0) >= componentReservePolicy.commitmentThreshold;
+        const group = first && this.getBondGroups().find((memberIds) => memberIds.includes(first.id));
+        const motifSignature = group ? this.getTopologyMotifSignature(group) : null;
+        const motifProtected = Boolean(topologyPolicy?.enabled && consolidatedSignatures.has(motifSignature));
+        const pathRecentlySupported = Boolean(topologyPolicy?.enabled
+          && (bond.topologyTrace ?? 0) >= topologyPolicy.edgeCommitmentThreshold);
+        const componentReserve = group
+          ? (this.componentReserves.get(this.componentReserveKey(group)) ?? 0)
+          : 0;
+        const hasSharedReserve = componentReserve >= componentReservePolicy.commitmentReserveFloor;
+        const isRecentlySupported = (bond.componentCommitment ?? 0) >= componentReservePolicy.commitmentThreshold
+          || (hasSharedReserve && (pathRecentlySupported || motifProtected));
         const hasUsableReserve = (bond.reserve ?? 0) >= componentReservePolicy.commitmentReserveFloor;
         if (!first || !second || !this.areAdjacent(first, second) || !isRecentlySupported || !hasUsableReserve) continue;
         activeKeys.add(key);
@@ -3896,6 +4054,13 @@ export class Simulation {
           activeNodeTraces: this.organisms.filter((organism) => organism.nodeTrace > 0.001).length,
           activeBondTraces: [...this.bonds.values()].filter((bond) => (bond.bondTrace ?? 0) > 0.001).length,
           successfulLocations: this.collectiveMemoryLocations.length
+        },
+        topologyMemory: {
+          ...this.config.bond.topologyMemory,
+          motifCount: this.topologyMotifs.size,
+          consolidatedMotifs: [...this.topologyMotifs.values()].filter((motif) => motif.trace >= this.config.bond.topologyMemory.motifConsolidationThreshold).length,
+          roles: { ...this.topologyRoleCounts },
+          topologyTraces: [...this.bonds.values()].filter((bond) => (bond.topologyTrace ?? 0) > 0.001).length
         }
       },
       facetCapital: {

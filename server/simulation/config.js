@@ -329,6 +329,24 @@ export const BASE_CONFIG = {
       consolidationThreshold: 2,
       maximumLocationRecords: 128
     },
+    topologyMemory: {
+      enabled: false,
+      maximumHops: 12,
+      pulseAttenuationPerHop: 0.82,
+      traceDecayRate: 0.985,
+      reinforcementStrength: 0.06,
+      maximumTrace: 1,
+      motifConsolidationThreshold: 0.35,
+      motifReinforcement: 0.08,
+      motifForgettingRate: 0.99,
+      maximumMotifs: 256,
+      motifMaintenanceBias: 0.18,
+      edgeCommitmentThreshold: 0.08,
+      stableTicksRequired: 12,
+      reproductionReserve: 8,
+      inheritanceFraction: 0.12,
+      inheritanceNoise: 0.02
+    },
     buddingReserveInvestment: 1.2,
     buddingCandidateTicks: 3
   },
