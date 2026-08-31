@@ -51,6 +51,9 @@ export class Simulation {
     this.facetWorkTrail = Array.from({ length: this.world.height }, () => Array(this.world.width).fill(0));
     this.compoundHeadings = new Map();
     this.bonds = new Map();
+    this.componentReserves = new Map();
+    this.componentReserveDeposited = 0;
+    this.componentReserveWithdrawn = 0;
     this.collectiveMemoryLocations = [];
     this.collectiveMemorySuccesses = new Map();
     this.bondGroupsCache = null;
@@ -283,6 +286,7 @@ export class Simulation {
           : bondAllocation;
         structuralAllocation = orderedBondAllocation.total;
         externalBondAllocation = orderedBondAllocation.external;
+        this.depositComponentReserveFromHarvest(organism, result.consumedEnergy);
         facetCapital = this.applyFacetHarvestAdvantage(organism, result.consumedEnergy);
       }
       if (result.consumedResource === RESOURCE_TYPES.RED && organism.alive) {
@@ -1183,6 +1187,9 @@ export class Simulation {
     this.birthMarkers = [];
     this.deathMarkers = [];
     this.bonds.clear();
+    this.componentReserves.clear();
+    this.componentReserveDeposited = 0;
+    this.componentReserveWithdrawn = 0;
     this.collectiveMemoryLocations = [];
     this.collectiveMemorySuccesses.clear();
     this.bondGroupsCache = null;
@@ -3010,6 +3017,50 @@ export class Simulation {
     return { total: allocatedEnergy, external: externalAllocation };
   }
 
+  componentReserveKey(memberIds) {
+    return [...memberIds].sort((a, b) => a - b).join(":");
+  }
+
+  depositComponentReserveFromHarvest(source, mealEnergy) {
+    const policy = this.config.bond.componentReserveEconomy;
+    if (!policy?.enabled || mealEnergy <= 0) return 0;
+    const group = this.getBondGroups().find((members) => members.includes(source.id));
+    if (!group || group.length < policy.minimumComponentSize) return 0;
+    const floor = this.getReproductionEnergyFloor(source);
+    const key = this.componentReserveKey(group);
+    const current = this.componentReserves.get(key) ?? 0;
+    const amount = Math.min(Math.max(0, source.energy - floor), mealEnergy * policy.contributionFraction, Math.max(0, policy.maximumReserve - current));
+    if (amount <= 0) return 0;
+    source.energy -= amount;
+    this.componentReserves.set(key, current + amount);
+    this.componentReserveDeposited += amount;
+    return amount;
+  }
+
+  routeComponentReservesToBonds() {
+    const policy = this.config.bond.componentReserveEconomy;
+    if (!policy?.enabled) return;
+    const activeKeys = new Set();
+    for (const group of this.getBondGroups()) {
+      if (group.length < policy.minimumComponentSize) continue;
+      const key = this.componentReserveKey(group); activeKeys.add(key);
+      let reserve = this.componentReserves.get(key) ?? 0;
+      const ids = new Set(group);
+      const bonds = [...this.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId))
+        .sort((a, b) => (a.reserve ?? 0) - (b.reserve ?? 0));
+      for (const bond of bonds) {
+        if (reserve <= 0) break;
+        const amount = Math.min(reserve, policy.maintenanceTransferPerTick, Math.max(0, this.config.bond.reserveCapacity - (bond.reserve ?? 0)));
+        if (amount <= 0) continue;
+        bond.reserve = (bond.reserve ?? 0) + amount;
+        reserve -= amount;
+        this.componentReserveWithdrawn += amount;
+      }
+      this.componentReserves.set(key, Math.max(0, reserve * (1 - policy.reserveDecayPerTick)));
+    }
+    for (const key of this.componentReserves.keys()) if (!activeKeys.has(key)) this.componentReserves.delete(key);
+  }
+
   supportLowEnergyMember(member) {
     if (member.energy >= this.config.bond.supportThreshold) return 0;
     const attachedBonds = [...this.bonds.values()]
@@ -3444,6 +3495,7 @@ export class Simulation {
     // Bond membership can change in this method. Calls elsewhere in the same
     // tick can safely reuse one component decomposition after it completes.
     this.bondGroupsCache = null;
+    this.routeComponentReservesToBonds();
     for (const bond of this.bonds.values()) {
       const reserveBeforeMaintenance = bond.reserve ?? this.config.bond.initialReserve;
       bond.reserve = Math.max(0, reserveBeforeMaintenance - this.config.bond.maintenancePerTick);
@@ -3807,6 +3859,13 @@ export class Simulation {
         relayEnergyWithdrawn: Number(this.bondRelayEnergyWithdrawn.toFixed(3)),
         relayEnergyDelivered: Number(this.bondRelayEnergyDelivered.toFixed(3)),
         relayRescues: this.bondRelayRescues,
+        componentReserveEconomy: {
+          ...this.config.bond.componentReserveEconomy,
+          activeReserves: this.componentReserves.size,
+          totalReserve: Number([...this.componentReserves.values()].reduce((sum, value) => sum + value, 0).toFixed(3)),
+          deposited: Number(this.componentReserveDeposited.toFixed(3)),
+          withdrawn: Number(this.componentReserveWithdrawn.toFixed(3))
+        },
         collectiveMemory: {
           ...this.config.bond.collectiveMemory,
           activeNodeTraces: this.organisms.filter((organism) => organism.nodeTrace > 0.001).length,

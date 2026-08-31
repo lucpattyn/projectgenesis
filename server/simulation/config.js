@@ -301,6 +301,15 @@ export const BASE_CONFIG = {
     surplusFirstEnergy: {
       enabled: false
     },
+    componentReserveEconomy: {
+      enabled: true,
+      contributionFraction: 0.08,
+      maximumReserve: 24,
+      maintenanceTransferPerTick: 0.3,
+      reserveDecayPerTick: 0.01,
+      minimumComponentSize: 3,
+      reproductionReserve: 8
+    },
     collectiveMemory: {
       enabled: false,
       maximumHops: 6,
