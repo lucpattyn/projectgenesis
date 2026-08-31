@@ -3628,6 +3628,7 @@ export class Simulation {
     const energies = this.organisms.map((organism) => organism.energy);
 
     return {
+      tick: this.simulationTicks,
       fps: Number(this.fpsEstimate.toFixed(1)),
       population: this.organisms.length,
       births: this.births,

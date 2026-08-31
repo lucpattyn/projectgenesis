@@ -932,6 +932,21 @@ input[type="range"] {
   white-space: nowrap;
 }
 
+.viewport-status-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tick-counter {
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: var(--muted);
+  font: 600 0.75rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: nowrap;
+}
+
 #world-scroll {
   flex: 1;
   min-height: 540px;
