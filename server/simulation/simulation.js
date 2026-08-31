@@ -3436,7 +3436,19 @@ export class Simulation {
       bond.reserve = Math.max(0, reserveBeforeMaintenance - this.config.bond.maintenancePerTick);
       this.energyEconomics.expenses.bondReserveMaintenance += reserveBeforeMaintenance - bond.reserve;
     }
-    const candidates = this.organisms.filter((organism) => organism.alive && organism.brainExecution?.effectors.bind >= 0.35);
+    let candidates = this.organisms.filter((organism) => organism.alive && organism.brainExecution?.effectors.bind >= 0.35);
+    const memoryPolicy = this.config.bond.collectiveMemory;
+    if (memoryPolicy?.enabled) {
+      const minimumTrace = memoryPolicy.consolidationThreshold * memoryPolicy.reinforcementStrength;
+      const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+      const consolidatedIds = new Set(candidates.map((organism) => organism.id));
+      for (const bond of this.bonds.values()) {
+        const first = byId.get(bond.firstId); const second = byId.get(bond.secondId);
+        if (!first || !second || !this.areAdjacent(first, second) || (bond.bondTrace ?? 0) < minimumTrace) continue;
+        consolidatedIds.add(first.id); consolidatedIds.add(second.id);
+      }
+      candidates = [...consolidatedIds].map((id) => byId.get(id)).filter(Boolean);
+    }
     const adjacentPairs = this.findAdjacentCandidatePairs(candidates);
     const adjacentPairKeys = new Set(adjacentPairs.map(([first, second]) => this.bondKey(first.id, second.id)));
     const neighbors = new Map(candidates.map((organism) => [organism.id, new Set()]));
