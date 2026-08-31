@@ -6,7 +6,7 @@
 
 ### Exact baseline and repository state
 
-- Start from the current committed `main` tip: **`93d2629`** — `docs: record topology persistence handoff`.
+- Start from the checked-in `main` worktree, including this handoff document. Do not restore a stash or reset history.
 - The current mechanics baseline is **`1fe7c8e`** — `feat: prioritize member survival in component reserves`; its immediate predecessor is **`d767402`** — `feat: add topology-native pulse and motif memory`.
 - The clean formation reference remains **`18866dc`**. Do not reset to it; it is the historical control, while the current commits are the working continuation.
 - Default live seed: **`160103`**. World number: **`85470`**.
