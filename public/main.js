@@ -4,6 +4,7 @@ const canvas = document.getElementById("world-canvas");
 const statsGrid = document.getElementById("stats-grid");
 const statusPill = document.getElementById("status-pill");
 const tickCounter = document.getElementById("tick-counter");
+const canvasTickCounter = document.getElementById("canvas-tick-counter");
 const speedSelect = document.getElementById("speed-select");
 const foodGrowthInput = document.getElementById("food-growth");
 const foodGrowthValue = document.getElementById("food-growth-value");
@@ -334,6 +335,7 @@ function syncControls(snapshot) {
   founderGenomeInput.value = JSON.stringify(snapshot.settings.founderGenome);
   statusPill.textContent = snapshot.controls.paused ? "Paused" : "Running";
   tickCounter.textContent = `Tick ${snapshot.statistics.tick ?? 0}`;
+  canvasTickCounter.textContent = `Tick ${snapshot.statistics.tick ?? 0}`;
   const resources = snapshot.ecology.resources ?? {};
   const resourceSummary = `Resources G:${resources.GREEN ?? 0} B:${resources.BLUE ?? 0} R:${resources.RED ?? 0}`;
   const fertilitySummary = snapshot.ecology.localFertility
