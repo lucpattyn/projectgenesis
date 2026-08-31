@@ -51,6 +51,8 @@ export class Simulation {
     this.facetWorkTrail = Array.from({ length: this.world.height }, () => Array(this.world.width).fill(0));
     this.compoundHeadings = new Map();
     this.bonds = new Map();
+    this.collectiveMemoryLocations = [];
+    this.collectiveMemorySuccesses = new Map();
     this.bondGroupsCache = null;
     this.bondCandidates = new Map();
     this.structuralBirthSeeds = new Map();
@@ -256,6 +258,7 @@ export class Simulation {
         collectiveWorkCue: this.getCollectiveWorkCue(organism),
         collectiveWorkFields: this.getActiveCollectiveWorkFields(),
         courierTarget: this.getCourierTarget(organism),
+        memoryDirectionScores: this.getMemoryDirectionScores(organism),
         neighborStates: neighborStatesByOrganism.get(organism.id) ?? [],
         brainExecutor: this.brainExecutor
       });
@@ -266,6 +269,7 @@ export class Simulation {
       let externalFacetSharing = 0;
       let facetCapital = 0;
       if (result.consumedEnergy > 0 && organism.alive) {
+        this.emitCollectivePulse(organism, "food", Math.min(1, result.consumedEnergy / 10), { x: organism.x, y: organism.y });
         const priorityMemberIds = this.getGateFieldEnergyPriority(organism, result.consumedFoodOrigin);
         const bondAllocation = this.feedAttachedBonds(organism, result.consumedEnergy, priorityMemberIds);
         structuralAllocation = bondAllocation.total;
@@ -299,6 +303,7 @@ export class Simulation {
       if (organism.alive) {
         const supportContext = this.getSupportContext(organism);
         const directSupport = this.supportLowEnergyMember(organism);
+        if (directSupport > 0) this.emitCollectivePulse(organism, "member-support", Math.min(1, directSupport / 2));
         const relayContext = this.getSupportContext(organism);
         const relay = this.relayReserveToMember(organism, relayContext);
         const relayedSupport = relay.delivered > 0 ? this.supportLowEnergyMember(organism) : 0;
@@ -352,6 +357,7 @@ export class Simulation {
     }
     this.world.updateEnvironmentMemory(this.config.environmentMemory);
 
+    this.decayCollectiveMemory();
     this.simulationTicks += 1;
     this.captureEnergyEconomicsInterval();
     this.captureEnergyLogisticsTick();
@@ -365,6 +371,65 @@ export class Simulation {
     const facet = this.getFacets().find((candidate) => candidate.key === gate.fieldFacetKey);
     if (!facet || !facet.memberIds.includes(organism.id)) return null;
     return new Set(facet.memberIds);
+  }
+
+  emitCollectivePulse(source, event, strength = 1, context = {}) {
+    const policy = this.config.bond.collectiveMemory;
+    if (!policy?.enabled || !source?.alive || strength <= 0) return;
+    const distance = new Map([[source.id, 0]]); const queue = [source.id];
+    while (queue.length) {
+      const id = queue.shift();
+      if (distance.get(id) >= policy.maximumHops) continue;
+      for (const bond of this.bonds.values()) {
+        const next = bond.firstId === id ? bond.secondId : (bond.secondId === id ? bond.firstId : null);
+        if (next !== null && !distance.has(next)) { distance.set(next, distance.get(id) + 1); queue.push(next); }
+      }
+    }
+    for (const [id, hops] of distance) {
+      const organism = this.organisms.find((candidate) => candidate.id === id);
+      if (organism) {
+        organism.nodeTrace = Math.min(policy.maximumTrace, organism.nodeTrace + strength * policy.reinforcementStrength * Math.pow(policy.pulseAttenuationPerHop, hops));
+        organism.lastPulseTick = this.simulationTicks;
+        organism.memoryEvent = event;
+        organism.memoryLocation = context.x === undefined ? { x: source.x, y: source.y } : { x: context.x, y: context.y };
+      }
+    }
+    for (const bond of this.bonds.values()) {
+      const hops = Math.min(distance.get(bond.firstId) ?? Infinity, distance.get(bond.secondId) ?? Infinity);
+      if (!Number.isFinite(hops)) continue;
+      bond.bondTrace = Math.min(policy.maximumTrace, (bond.bondTrace ?? 0) + strength * policy.reinforcementStrength * Math.pow(policy.pulseAttenuationPerHop, hops));
+      bond.lastPulseTick = this.simulationTicks;
+      bond.lastPulseEvent = event;
+    }
+    const key = `${event}:${context.x ?? source.x},${context.y ?? source.y}`;
+    const repeats = (this.collectiveMemorySuccesses.get(key) ?? 0) + 1;
+    this.collectiveMemorySuccesses.set(key, repeats);
+    for (const id of distance.keys()) {
+      const organism = this.organisms.find((candidate) => candidate.id === id);
+      if (organism) organism.memoryRepeats = Math.max(organism.memoryRepeats ?? 0, repeats);
+    }
+    this.collectiveMemoryLocations.push({ x: context.x ?? source.x, y: context.y ?? source.y, event, repeats, tick: this.simulationTicks });
+    if (this.collectiveMemoryLocations.length > policy.maximumLocationRecords) this.collectiveMemoryLocations.shift();
+  }
+
+  decayCollectiveMemory() {
+    const policy = this.config.bond.collectiveMemory;
+    if (!policy?.enabled) return;
+    for (const organism of this.organisms) organism.nodeTrace *= policy.traceDecayRate;
+    for (const bond of this.bonds.values()) bond.bondTrace = (bond.bondTrace ?? 0) * policy.traceDecayRate;
+  }
+
+  getMemoryDirectionScores(organism) {
+    const policy = this.config.bond.collectiveMemory;
+    const scores = Object.fromEntries(DIRECTIONS.map((direction) => [direction.name, 0]));
+    const memory = organism?.memoryLocation;
+    if (!policy?.enabled || !memory || organism.memoryRepeats < policy.consolidationThreshold || organism.nodeTrace < policy.reinforcementStrength) return scores;
+    const before = this.distanceBetweenPositions(organism, memory);
+    for (const direction of DIRECTIONS) {
+      const target = this.world.wrapPosition(organism.x + direction.x, organism.y + direction.y);
+      if (this.distanceBetweenPositions(target, memory) < before) scores[direction.name] = policy.maximumMovementBias * organism.nodeTrace;
+    }
+    return scores;
   }
 
   handleReproduction() {
@@ -403,6 +468,7 @@ export class Simulation {
       this.lastOrdinaryReproductionParents.add(organism.id);
       occupied.add(`${childPosition.x},${childPosition.y}`);
       this.births += 1;
+      if (this.config.bond.collectiveMemory.enabled) this.emitCollectivePulse(organism, "reproduction", 0.75, childPosition);
       this.birthMarkers.push({
         x: childPosition.x,
         y: childPosition.y,
@@ -1106,6 +1172,8 @@ export class Simulation {
     this.birthMarkers = [];
     this.deathMarkers = [];
     this.bonds.clear();
+    this.collectiveMemoryLocations = [];
+    this.collectiveMemorySuccesses.clear();
     this.bondGroupsCache = null;
     this.bondCandidates.clear();
     this.structuralBirthSeeds.clear();
@@ -2152,6 +2220,7 @@ export class Simulation {
       }
       if (gate.progress >= this.config.collectiveWork.requiredConsensusTicks) {
         this.collectiveWorkCompletions += 1;
+        this.emitCollectivePulse(facet.memberIds.map((id) => this.organisms.find((organism) => organism.id === id)).find(Boolean), "gate", 1, { x: gate.x, y: gate.y });
         gate.fieldStrength = this.config.collectiveWork.gateFieldMaximum;
         gate.productionBudget = 0;
         gate.fieldStartedTick = this.simulationTicks;
@@ -2893,9 +2962,13 @@ export class Simulation {
     if (!attachedBonds.length) return { total: 0, external: 0 };
 
     const availableEnergy = Math.min(eater.energy, mealEnergy * this.config.bond.mealEnergyFraction);
-    const orderedBonds = priorityMemberIds
+    let orderedBonds = priorityMemberIds
       ? [...attachedBonds.filter((bond) => priorityMemberIds.has(bond.firstId === eater.id ? bond.secondId : bond.firstId)), ...attachedBonds.filter((bond) => !priorityMemberIds.has(bond.firstId === eater.id ? bond.secondId : bond.firstId))]
       : attachedBonds;
+    if (this.config.bond.collectiveMemory.enabled) {
+      orderedBonds = [...orderedBonds].sort((a, b) => (b.bondTrace ?? 0) - (a.bondTrace ?? 0)
+        || (a.reserve ?? 0) - (b.reserve ?? 0));
+    }
     const proposedShare = availableEnergy / attachedBonds.length;
     let allocatedEnergy = 0;
     let externalAllocation = 0;
@@ -3304,6 +3377,7 @@ export class Simulation {
         this.collectiveGateArrivals += 1;
         this.recordComponentEpisodeGateArrival(members, navigationGate);
         this.gateFacetAssignments.set(navigationTarget.facetKey, navigationGate.id);
+        this.emitCollectivePulse(members[0], "migration", 0.8, navigationGate);
       }
     }
     for (const key of this.compoundHeadings.keys()) {
@@ -3424,6 +3498,9 @@ export class Simulation {
           secondId: second.id,
           strength: 0.35,
           reserve: Math.min(this.config.bond.reserveCapacity, this.config.bond.initialReserve + seedEnergy),
+          bondTrace: 0,
+          lastPulseTick: null,
+          lastPulseEvent: null,
           inherited: this.structuralBirthSeeds.has(key)
         });
         this.structuralBirthSeeds.delete(key);
@@ -3698,7 +3775,13 @@ export class Simulation {
         relayTransfers: this.bondRelayTransfers,
         relayEnergyWithdrawn: Number(this.bondRelayEnergyWithdrawn.toFixed(3)),
         relayEnergyDelivered: Number(this.bondRelayEnergyDelivered.toFixed(3)),
-        relayRescues: this.bondRelayRescues
+        relayRescues: this.bondRelayRescues,
+        collectiveMemory: {
+          ...this.config.bond.collectiveMemory,
+          activeNodeTraces: this.organisms.filter((organism) => organism.nodeTrace > 0.001).length,
+          activeBondTraces: [...this.bonds.values()].filter((bond) => (bond.bondTrace ?? 0) > 0.001).length,
+          successfulLocations: this.collectiveMemoryLocations.length
+        }
       },
       facetCapital: {
         source: "Extra energy recovered when a strong closed facet harvests a resource.",

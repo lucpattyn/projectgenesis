@@ -188,3 +188,14 @@ Future phases can add:
 - server deployment with PM2 and GitHub sync
 
 Phase 7 makes inheritance arithmetic. Prediction, communication, abstraction, planning, and richer persistent structures remain future phases.
+
+## Collective memory layer (switchable)
+
+The experimental `bond.collectiveMemory` layer starts disabled and can be
+enabled without changing the baseline seed or world recipe. Useful events emit
+bounded pulses through existing bonds; organisms and bonds retain decaying
+traces, and repeated event locations can provide a small movement and energy
+routing bias. Pulses never create energy, override legal movement, or privilege
+a named geometric shape. The current implementation covers food, gate
+completion, migration arrival, reproduction, and member-support pulses;
+inheritance/consolidation diagnostics are intentionally staged for later work.

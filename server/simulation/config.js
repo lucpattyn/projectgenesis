@@ -298,6 +298,18 @@ export const BASE_CONFIG = {
     relayCriticalEnergy: 2,
     maxRelayPerTick: 0.5,
     relayLossFraction: 0.2,
+    collectiveMemory: {
+      enabled: false,
+      maximumHops: 6,
+      traceDecayRate: 0.985,
+      pulseAttenuationPerHop: 0.78,
+      reinforcementStrength: 0.08,
+      maximumTrace: 1,
+      maximumMovementBias: 0.18,
+      inheritanceFraction: 0.12,
+      consolidationThreshold: 2,
+      maximumLocationRecords: 128
+    },
     buddingReserveInvestment: 1.2,
     buddingCandidateTicks: 3
   },

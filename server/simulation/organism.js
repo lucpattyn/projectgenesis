@@ -28,7 +28,12 @@ export class Organism {
     mutation = null,
     hue,
     direction,
-    random
+    random,
+    nodeTrace = 0,
+    lastPulseTick = null,
+    memoryEvent = null,
+    memoryLocation = null,
+    memoryRepeats = 0
   }) {
     this.id = id;
     this.x = x;
@@ -54,6 +59,11 @@ export class Organism {
     this.lastConsumedResource = null;
     this.sharedState = { connectedNeighbors: 0, contributors: [], mean: 0 };
     this.collectiveDecision = null;
+    this.nodeTrace = nodeTrace;
+    this.lastPulseTick = lastPulseTick;
+    this.memoryEvent = memoryEvent;
+    this.memoryLocation = memoryLocation;
+    this.memoryRepeats = memoryRepeats;
     this.collectiveStrideActive = false;
     this.collectiveTransportActive = false;
     this.satietyMigrationActive = false;
@@ -72,7 +82,7 @@ export class Organism {
     return this.direction;
   }
 
-  chooseGraphDirection(world, occupiedKeys) {
+  chooseGraphDirection(world, occupiedKeys, memoryDirectionScores = null) {
     const scores = this.brainExecution?.effectors.direction ?? {};
     const legalDirections = DIRECTIONS.filter((candidate) => {
       const target = world.wrapPosition(this.x + candidate.x, this.y + candidate.y);
@@ -83,12 +93,14 @@ export class Organism {
       return this.direction;
     }
 
-    const strongestScore = Math.max(...legalDirections.map((candidate) => scores[candidate.name] ?? 0));
-    const strongestDirections = legalDirections.filter((candidate) => (scores[candidate.name] ?? 0) === strongestScore);
+    const combinedScores = Object.fromEntries(legalDirections.map((candidate) => [candidate.name,
+      (scores[candidate.name] ?? 0) + (memoryDirectionScores?.[candidate.name] ?? 0)]));
+    const strongestScore = Math.max(...legalDirections.map((candidate) => combinedScores[candidate.name] ?? 0));
+    const strongestDirections = legalDirections.filter((candidate) => (combinedScores[candidate.name] ?? 0) === strongestScore);
     // Keeping the current heading on a tie avoids adding a hidden random movement rule.
     const chosen = strongestDirections.find((candidate) => candidate.name === this.direction.name) ?? strongestDirections[0];
     this.direction = chosen;
-    this.movementDecision = { mode: "graph", chosen: chosen.name, scores };
+    this.movementDecision = { mode: "graph", chosen: chosen.name, scores: combinedScores };
     return chosen;
   }
 
@@ -98,7 +110,7 @@ export class Organism {
     return Number.isFinite(value) ? clamp(value, 0, 1.8) : null;
   }
 
-  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, environmentMemoryConfig, brainExecutor, coupled, collectiveStrideMultiplier = 1, deferOrdinaryHarvest = false, harvestRestraint = null, neighborStates = [], structuralFocus = null, collectiveWorkCue = 0, collectiveWorkFields = [], courierTarget = null }) {
+  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, environmentMemoryConfig, brainExecutor, coupled, collectiveStrideMultiplier = 1, deferOrdinaryHarvest = false, harvestRestraint = null, neighborStates = [], structuralFocus = null, collectiveWorkCue = 0, collectiveWorkFields = [], courierTarget = null, memoryDirectionScores = null }) {
     let consumedEnergy = 0;
     let consumedResource = null;
     const energyFlow = { income: { food: 0, gateWork: 0 }, expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, bondReserveMaintenance: 0, gateWork: 0, memory: 0, signals: 0, idle: 0 }, losses: { capacityOverflow: 0, deathStoredEnergy: 0 } };
@@ -178,7 +190,7 @@ export class Organism {
     const shouldMove = !coupled && this.brainExecution.effectors.move >= 0.05;
     const direction = shouldMove
       ? (this.genomeProfile.traits.canSenseNeighborhood
-        ? this.chooseGraphDirection(world, occupiedKeys)
+        ? this.chooseGraphDirection(world, occupiedKeys, memoryDirectionScores)
         : this.chooseRandomDirection())
       : this.direction;
     if (shouldMove && !this.genomeProfile.traits.canSenseNeighborhood) {
@@ -368,6 +380,11 @@ export class Organism {
       lastConsumedResource: this.lastConsumedResource,
       signalOutput: Number((this.brainExecution?.effectors.signal ?? 0).toFixed(2)),
       movementDecision: this.movementDecision,
+      nodeTrace: Number(this.nodeTrace.toFixed(3)),
+      lastPulseTick: this.lastPulseTick,
+      memoryEvent: this.memoryEvent,
+      memoryLocation: this.memoryLocation,
+      memoryRepeats: this.memoryRepeats,
       collectiveDecision: this.collectiveDecision,
       collectiveStrideActive: this.collectiveStrideActive,
       collectiveTransportActive: this.collectiveTransportActive,
