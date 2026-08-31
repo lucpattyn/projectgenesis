@@ -271,12 +271,18 @@ export class Simulation {
       if (result.consumedEnergy > 0 && organism.alive) {
         this.emitCollectivePulse(organism, "food", Math.min(1, result.consumedEnergy / 10), { x: organism.x, y: organism.y });
         const priorityMemberIds = this.getGateFieldEnergyPriority(organism, result.consumedFoodOrigin);
-        const sharing = this.shareFacetEnergy(organism, result.consumedEnergy, priorityMemberIds);
+        const surplusFirst = this.config.bond.surplusFirstEnergy?.enabled !== false;
+        const bondAllocation = surplusFirst
+          ? { total: 0, external: 0 }
+          : this.feedAttachedBonds(organism, result.consumedEnergy, priorityMemberIds);
+        const sharing = this.shareFacetEnergy(organism, surplusFirst ? result.consumedEnergy : Math.max(0, result.consumedEnergy - bondAllocation.total), priorityMemberIds);
         facetSharing = sharing.total;
         externalFacetSharing = sharing.external;
-        const bondAllocation = this.feedAttachedBonds(organism, Math.max(0, result.consumedEnergy - sharing.total), priorityMemberIds);
-        structuralAllocation = bondAllocation.total;
-        externalBondAllocation = bondAllocation.external;
+        const orderedBondAllocation = surplusFirst
+          ? this.feedAttachedBonds(organism, Math.max(0, result.consumedEnergy - sharing.total), priorityMemberIds)
+          : bondAllocation;
+        structuralAllocation = orderedBondAllocation.total;
+        externalBondAllocation = orderedBondAllocation.external;
         facetCapital = this.applyFacetHarvestAdvantage(organism, result.consumedEnergy);
       }
       if (result.consumedResource === RESOURCE_TYPES.RED && organism.alive) {
@@ -2911,7 +2917,8 @@ export class Simulation {
     if (!recipients.size) return { total: 0, external: 0 };
 
     const averageStrength = average([...recipients.values()].map((recipient) => recipient.strength));
-    const pool = Math.min(Math.max(0, eater.energy - this.getReproductionEnergyFloor(eater)), mealEnergy * this.config.facet.sharingFraction * averageStrength);
+    const floor = this.config.bond.surplusFirstEnergy?.enabled === false ? 0 : this.getReproductionEnergyFloor(eater);
+    const pool = Math.min(Math.max(0, eater.energy - floor), mealEnergy * this.config.facet.sharingFraction * averageStrength);
     if (pool <= 0) return { total: 0, external: 0 };
 
     const orderedRecipients = [...recipients.values()].sort((first, second) => first.organism.energy - second.organism.energy);
@@ -2971,7 +2978,8 @@ export class Simulation {
     const attachedBonds = [...this.bonds.values()].filter((bond) => bond.firstId === eater.id || bond.secondId === eater.id);
     if (!attachedBonds.length) return { total: 0, external: 0 };
 
-    const availableEnergy = Math.min(Math.max(0, eater.energy - this.getReproductionEnergyFloor(eater)), mealEnergy * this.config.bond.mealEnergyFraction);
+    const floor = this.config.bond.surplusFirstEnergy?.enabled === false ? 0 : this.getReproductionEnergyFloor(eater);
+    const availableEnergy = Math.min(Math.max(0, eater.energy - floor), mealEnergy * this.config.bond.mealEnergyFraction);
     let orderedBonds = priorityMemberIds
       ? [...attachedBonds.filter((bond) => priorityMemberIds.has(bond.firstId === eater.id ? bond.secondId : bond.firstId)), ...attachedBonds.filter((bond) => !priorityMemberIds.has(bond.firstId === eater.id ? bond.secondId : bond.firstId))]
       : attachedBonds;

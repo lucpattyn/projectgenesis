@@ -298,8 +298,11 @@ export const BASE_CONFIG = {
     relayCriticalEnergy: 2,
     maxRelayPerTick: 0.5,
     relayLossFraction: 0.2,
+    surplusFirstEnergy: {
+      enabled: false
+    },
     collectiveMemory: {
-      enabled: true,
+      enabled: false,
       maximumHops: 6,
       traceDecayRate: 0.985,
       pulseAttenuationPerHop: 0.78,
