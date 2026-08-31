@@ -34,6 +34,8 @@ When enabled, the server also records topology signatures made from component si
 
 The layer is intentionally measured against the same seed and tick horizon with the switch off and on before changing live defaults. Diagnostics expose role counts, motif counts, consolidation, topology traces, pulse paths, and reserve throughput in the bonding snapshot.
 
+The reserve budget follows a strict survival order: source survival floor, protected reproduction slice, weakest-member support, then bond maintenance. A topology-memory pulse can preserve an edge only while its component still has usable reserve and all members are above the support floor. This prevents a successful motif from keeping bonds alive by starving its own members.
+
 ## Historical foundations: Phases 13–15.5
 
 Phase 14 added distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.

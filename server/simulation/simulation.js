@@ -54,6 +54,8 @@ export class Simulation {
     this.componentReserves = new Map();
     this.componentReserveDeposited = 0;
     this.componentReserveWithdrawn = 0;
+    this.componentReserveMemberSupport = 0;
+    this.componentReserveBondFunding = 0;
     this.collectiveMemoryLocations = [];
     this.collectiveMemorySuccesses = new Map();
     this.topologyMotifs = new Map();
@@ -1326,6 +1328,8 @@ export class Simulation {
     this.componentReserves.clear();
     this.componentReserveDeposited = 0;
     this.componentReserveWithdrawn = 0;
+    this.componentReserveMemberSupport = 0;
+    this.componentReserveBondFunding = 0;
     this.collectiveMemoryLocations = [];
     this.collectiveMemorySuccesses.clear();
     this.topologyMotifs.clear();
@@ -3185,11 +3189,28 @@ export class Simulation {
       const key = this.componentReserveKey(group); activeKeys.add(key);
       let reserve = this.componentReserves.get(key) ?? 0;
       const ids = new Set(group);
+      const members = group.map((id) => this.organisms.find((organism) => organism.id === id)).filter((member) => member?.alive);
+      // The shared reserve must repair member deficits before it pays any edge.
+      const supportTarget = this.config.bond.supportThreshold;
+      for (const member of members.sort((a, b) => a.energy - b.energy)) {
+        if (reserve <= 0 || member.energy >= supportTarget) continue;
+        const need = supportTarget - member.energy;
+        const amount = Math.min(reserve, policy.memberSupportTransferPerTick, need);
+        if (amount <= 0) continue;
+        member.energy += amount;
+        reserve -= amount;
+        this.componentReserveWithdrawn += amount;
+        this.componentReserveMemberSupport += amount;
+      }
+      // Keep a protected slice for structural reproduction; only the remainder
+      // may be routed into bond reserves.
+      const protectedReproduction = Math.min(policy.reproductionReserve, reserve * policy.reproductionReserveFraction);
+      let bondBudget = Math.max(0, reserve - protectedReproduction);
       const bonds = [...this.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId))
         .sort((a, b) => (a.reserve ?? 0) - (b.reserve ?? 0));
       for (const bond of bonds) {
-        if (reserve <= 0) break;
-        const amount = Math.min(reserve, policy.maintenanceTransferPerTick, Math.max(0, this.config.bond.reserveCapacity - (bond.reserve ?? 0)));
+        if (bondBudget <= 0) break;
+        const amount = Math.min(bondBudget, policy.maintenanceTransferPerTick, Math.max(0, this.config.bond.reserveCapacity - (bond.reserve ?? 0)));
         if (amount <= 0) continue;
         bond.reserve = (bond.reserve ?? 0) + amount;
         if (policy.commitmentEnabled) {
@@ -3199,7 +3220,9 @@ export class Simulation {
           );
         }
         reserve -= amount;
+        bondBudget -= amount;
         this.componentReserveWithdrawn += amount;
+        this.componentReserveBondFunding += amount;
       }
       this.componentReserves.set(key, Math.max(0, reserve * (1 - policy.reserveDecayPerTick)));
     }
@@ -3764,10 +3787,14 @@ export class Simulation {
           ? (this.componentReserves.get(this.componentReserveKey(group)) ?? 0)
           : 0;
         const hasSharedReserve = componentReserve >= componentReservePolicy.commitmentReserveFloor;
+        const membersSafe = Boolean(group?.length && group.every((id) => {
+          const member = byId.get(id);
+          return member && member.energy >= this.config.bond.supportThreshold;
+        }));
         const isRecentlySupported = (bond.componentCommitment ?? 0) >= componentReservePolicy.commitmentThreshold
           || (hasSharedReserve && (pathRecentlySupported || motifProtected));
         const hasUsableReserve = (bond.reserve ?? 0) >= componentReservePolicy.commitmentReserveFloor;
-        if (!first || !second || !this.areAdjacent(first, second) || !isRecentlySupported || !hasUsableReserve) continue;
+        if (!first || !second || !this.areAdjacent(first, second) || !isRecentlySupported || !hasUsableReserve || !membersSafe) continue;
         activeKeys.add(key);
         this.bondCandidates.set(key, Math.max(1, this.bondCandidates.get(key) ?? 0));
         bond.strength = Math.min(1, bond.strength + this.config.bond.repairPerTick * 0.5);
@@ -4047,7 +4074,9 @@ export class Simulation {
           activeReserves: this.componentReserves.size,
           totalReserve: Number([...this.componentReserves.values()].reduce((sum, value) => sum + value, 0).toFixed(3)),
           deposited: Number(this.componentReserveDeposited.toFixed(3)),
-          withdrawn: Number(this.componentReserveWithdrawn.toFixed(3))
+          withdrawn: Number(this.componentReserveWithdrawn.toFixed(3)),
+          memberSupport: Number(this.componentReserveMemberSupport.toFixed(3)),
+          bondFunding: Number(this.componentReserveBondFunding.toFixed(3))
         },
         collectiveMemory: {
           ...this.config.bond.collectiveMemory,
