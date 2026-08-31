@@ -3053,6 +3053,12 @@ export class Simulation {
         const amount = Math.min(reserve, policy.maintenanceTransferPerTick, Math.max(0, this.config.bond.reserveCapacity - (bond.reserve ?? 0)));
         if (amount <= 0) continue;
         bond.reserve = (bond.reserve ?? 0) + amount;
+        if (policy.commitmentEnabled) {
+          bond.componentCommitment = Math.min(
+            1,
+            (bond.componentCommitment ?? 0) + amount * policy.commitmentGainPerEnergy
+          );
+        }
         reserve -= amount;
         this.componentReserveWithdrawn += amount;
       }
@@ -3496,7 +3502,11 @@ export class Simulation {
     // tick can safely reuse one component decomposition after it completes.
     this.bondGroupsCache = null;
     this.routeComponentReservesToBonds();
+    const componentReservePolicy = this.config.bond.componentReserveEconomy;
     for (const bond of this.bonds.values()) {
+      if (componentReservePolicy?.commitmentEnabled) {
+        bond.componentCommitment = (bond.componentCommitment ?? 0) * componentReservePolicy.commitmentDecayRate;
+      }
       const reserveBeforeMaintenance = bond.reserve ?? this.config.bond.initialReserve;
       bond.reserve = Math.max(0, reserveBeforeMaintenance - this.config.bond.maintenancePerTick);
       this.energyEconomics.expenses.bondReserveMaintenance += reserveBeforeMaintenance - bond.reserve;
@@ -3581,6 +3591,7 @@ export class Simulation {
           strength: 0.35,
           reserve: Math.min(this.config.bond.reserveCapacity, this.config.bond.initialReserve + seedEnergy),
           bondTrace: 0,
+          componentCommitment: 0,
           lastPulseTick: null,
           lastPulseEvent: null,
           inherited: this.structuralBirthSeeds.has(key)
@@ -3588,6 +3599,20 @@ export class Simulation {
         this.structuralBirthSeeds.delete(key);
         this.bondsFormed += 1;
         this.recordTelemetry("bond-formed", `Bond formed: organisms #${first.id} and #${second.id}${seedEnergy ? " from a structural birth seed" : ""}.`);
+      }
+    }
+    // Maintenance only: a local reserve can retain an existing adjacent edge
+    // through a brief loss of bind drive, but it cannot form an extra edge.
+    if (componentReservePolicy?.enabled && componentReservePolicy.commitmentEnabled) {
+      for (const [key, bond] of this.bonds) {
+        const first = byId.get(bond.firstId);
+        const second = byId.get(bond.secondId);
+        const isRecentlySupported = (bond.componentCommitment ?? 0) >= componentReservePolicy.commitmentThreshold;
+        const hasUsableReserve = (bond.reserve ?? 0) >= componentReservePolicy.commitmentReserveFloor;
+        if (!first || !second || !this.areAdjacent(first, second) || !isRecentlySupported || !hasUsableReserve) continue;
+        activeKeys.add(key);
+        this.bondCandidates.set(key, Math.max(1, this.bondCandidates.get(key) ?? 0));
+        bond.strength = Math.min(1, bond.strength + this.config.bond.repairPerTick * 0.5);
       }
     }
     for (const key of this.bondCandidates.keys()) {

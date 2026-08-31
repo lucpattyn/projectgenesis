@@ -308,7 +308,14 @@ export const BASE_CONFIG = {
       maintenanceTransferPerTick: 0.3,
       reserveDecayPerTick: 0.01,
       minimumComponentSize: 3,
-      reproductionReserve: 8
+      reproductionReserve: 8,
+      // A funded edge can bridge a short binding-drive dip, never bypassing
+      // adjacency or its local energy requirement.
+      commitmentEnabled: true,
+      commitmentGainPerEnergy: 0.5,
+      commitmentDecayRate: 0.94,
+      commitmentThreshold: 0.12,
+      commitmentReserveFloor: 0.5
     },
     collectiveMemory: {
       enabled: false,
