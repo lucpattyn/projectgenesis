@@ -44,6 +44,10 @@ Scout eligibility now also requires a redundant core: minimum internal bonds, po
 
 Facet-local memory combines each facet's internal cycle with the sorted external attachment degrees. Only collective successes reinforce that record, at most once per tick; ordinary individual food pulses do not saturate every triangle. A later facet can rediscover the trace when the same local topology reappears, while decay and attachment changes make the memory forgetful.
 
+### Why topology memory remains compatible with the intelligence goal
+
+Topology memory is a substrate for emergent collective intelligence, not a hard-coded answer. The simulation does not assign meaning to a pentagon, diamond, star, or any other shape. It records only that a live topology repeatedly carried a useful event, then gives that topology a bounded, decaying trace. Pulses are signals, traces are memory, repeated success is consolidation, and decay is forgetting. Memory can bias maintenance, routing, or reproduction, but it cannot create energy, force a movement target, bypass adjacency, make a bond immortal, or override ordinary lifecycle rules. A motif must continue proving its usefulness, and changed topology or failed work weakens its record. This preserves the project's original question: whether useful computation and organization can arise from simple prime-generated organisms, rather than being inserted as a predefined intelligence.
+
 ## Historical foundations: Phases 13–15.5
 
 Phase 14 added distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.
