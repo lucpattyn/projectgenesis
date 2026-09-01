@@ -38,6 +38,8 @@ The reserve budget follows a strict survival order: source survival floor, prote
 
 The first scout stage is observational: the server identifies degree-one terminals attached to cyclic cores and records bounded tethered-scout eligibility/episode state, but does not yet move scouts independently or alter bonds. This null-intervention boundary was verified against seed `160103`; enabling the diagnostics produced identical ecology over 300 ticks. Return-path movement and reinforcement are the next separately tested intervention.
 
+The experimental elastic-tether mode is now implemented but remains off by default (`bond.topologyMemory.tetheredScout.elasticEnabled: false`). It permits one eligible terminal to make bounded local moves, records value-bearing returns, and emits a return pulse. In the first 800-tick seed-`160103` screen it produced 93 departures and 31 successful returns, but reduced endpoint structure from 55 bonds/37 facets to 14/7. This is a useful negative result: excursion frequency or tether cost must be tuned before enabling it live.
+
 ## Historical foundations: Phases 13–15.5
 
 Phase 14 added distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.

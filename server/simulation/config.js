@@ -353,7 +353,11 @@ export const BASE_CONFIG = {
         maximumExcursionTicks: 24,
         leashRadius: 2,
         energyFloor: 6,
-        minimumCoreSize: 3
+        minimumCoreSize: 3,
+        elasticEnabled: false,
+        excursionMovementCost: 0.15,
+        returnPulseStrength: 0.9,
+        returnReserveFraction: 0.12
       }
     },
     buddingReserveInvestment: 1.2,

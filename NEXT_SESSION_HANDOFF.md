@@ -65,7 +65,7 @@ The first narrow step is now implemented in the current worktree: graph-derived 
 
 ### Next task
 
-Add return-path episode state and pulse rewards as a separate commit. Begin with local movement constrained by the configured leash, excursion timer, and scout energy floor. Only a scout that finds real food or a useful gate signal and returns to its attachment should reinforce the path. Do not change reserve allocation or implement edge shedding in that commit; rerun the null intervention first, then the enabled 800-tick comparison.
+Return-path episode state and pulse rewards are now implemented as an opt-in elastic-tether mode. In the first 800-tick seed-`160103` run, scouts made 93 departures and 31 successful value-bearing returns, but endpoint structure fell from 55 bonds/37 facets with elastic mode off to 14/7 with it on. Keep `elasticEnabled: false` in live runs. Next tune excursion cadence/tether cost and require adequate component reserve before departure; do not add edge shedding until this mode no longer harms core persistence.
 
 ### Useful commands
 

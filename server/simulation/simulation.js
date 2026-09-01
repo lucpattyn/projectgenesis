@@ -70,6 +70,8 @@ export class Simulation {
       leashViolations: 0,
       energyAborts: 0,
       timeoutAborts: 0
+      ,valueFinds: 0
+      ,successfulReturns: 0
     };
     this.bondGroupsCache = null;
     this.bondCandidates = new Map();
@@ -287,6 +289,7 @@ export class Simulation {
       let externalFacetSharing = 0;
       let facetCapital = 0;
       if (result.consumedEnergy > 0 && organism.alive) {
+        this.recordTetheredScoutValue(organism, result.consumedEnergy);
         this.emitCollectivePulse(organism, "food", Math.min(1, result.consumedEnergy / 10), { x: organism.x, y: organism.y });
         const priorityMemberIds = this.getGateFieldEnergyPriority(organism, result.consumedFoodOrigin);
         const surplusFirst = this.config.bond.surplusFirstEnergy?.enabled !== false;
@@ -350,6 +353,7 @@ export class Simulation {
     this.recordEnvironmentMemoryReads();
 
     this.moveCompounds();
+    this.moveElasticTetherScouts();
     this.updateCourierExchange();
     this.handleReproduction();
     this.handleAutonomousFacetBudding();
@@ -446,7 +450,8 @@ export class Simulation {
         const scout = byId.get(id);
         if (!scout || scout.energy < policy.energyFloor) continue;
         const attachmentId = neighbors.find((neighborId) => roles.get(neighborId) === "core");
-        candidates.push({ scout, attachment: byId.get(attachmentId), componentIds: group });
+        const bond = this.bonds.get(this.bondKey(id, attachmentId));
+        candidates.push({ scout, attachment: byId.get(attachmentId), bond, componentIds: group });
       }
     }
     return candidates.filter((candidate) => candidate.attachment);
@@ -480,6 +485,89 @@ export class Simulation {
         episode.state = "ineligible";
       }
     }
+  }
+
+  moveElasticTetherScouts() {
+    const policy = this.config.bond.topologyMemory?.tetheredScout;
+    if (!policy?.enabled || !policy.elasticEnabled || !this.config.bond.topologyMemory.enabled) return;
+    const candidates = this.getTetheredScoutCandidates();
+    const activeComponents = new Set();
+    const occupied = new Set(this.organisms.filter((organism) => organism.alive).map((organism) => `${organism.x},${organism.y}`));
+    for (const candidate of candidates) {
+      const { scout, attachment, bond, componentIds } = candidate;
+      if (!bond) continue;
+      const componentKey = this.componentReserveKey(componentIds);
+      const episodeKey = String(scout.id);
+      let episode = this.tetheredScoutEpisodes.get(episodeKey);
+      if (episode?.active) {
+        activeComponents.add(componentKey);
+      } else if (activeComponents.has(componentKey) || scout.energy < policy.energyFloor + policy.excursionMovementCost) {
+        continue;
+      } else {
+        episode = {
+          scoutId: scout.id,
+          attachmentId: attachment.id,
+          startedTick: this.simulationTicks,
+          active: true,
+          state: "exploring",
+          valueCollected: 0,
+          distanceFromAttachment: 0,
+          componentSize: componentIds.length
+        };
+        this.tetheredScoutEpisodes.set(episodeKey, episode);
+        bond.elasticScout = true;
+        this.tetheredScoutDiagnostics.departures += 1;
+        activeComponents.add(componentKey);
+      }
+      const elapsed = this.simulationTicks - episode.startedTick;
+      if (elapsed >= policy.maximumExcursionTicks) {
+        episode.active = false;
+        episode.state = "timeout";
+        this.tetheredScoutDiagnostics.timeoutAborts += 1;
+        bond.elasticScout = false;
+        continue;
+      }
+      const returning = episode.valueCollected > 0;
+      const legalDirections = DIRECTIONS.filter((direction) => {
+        const target = this.world.wrapPosition(scout.x + direction.x, scout.y + direction.y);
+        if (!this.world.isWalkable(target.x, target.y) || occupied.has(`${target.x},${target.y}`)) return false;
+        const nextDistance = this.distanceBetweenPositions({ x: target.x, y: target.y }, attachment);
+        return nextDistance <= policy.leashRadius
+          && (!returning || nextDistance <= this.distanceBetweenPositions(scout, attachment));
+      });
+      if (!legalDirections.length) continue;
+      const direction = [...legalDirections].sort((first, second) => {
+        if (!returning) return (scout.brainExecution?.effectors.direction?.[second.name] ?? 0)
+          - (scout.brainExecution?.effectors.direction?.[first.name] ?? 0);
+        return this.distanceBetweenPositions(this.world.wrapPosition(scout.x + first.x, scout.y + first.y), attachment)
+          - this.distanceBetweenPositions(this.world.wrapPosition(scout.x + second.x, scout.y + second.y), attachment);
+      })[0];
+      occupied.delete(`${scout.x},${scout.y}`);
+      const target = this.world.wrapPosition(scout.x + direction.x, scout.y + direction.y);
+      scout.x = target.x;
+      scout.y = target.y;
+      occupied.add(`${scout.x},${scout.y}`);
+      scout.energy -= policy.excursionMovementCost;
+      scout.energyLedger.expenses.movement += policy.excursionMovementCost;
+      episode.distanceFromAttachment = this.distanceBetweenPositions(scout, attachment);
+      if (episode.valueCollected > 0 && this.areAdjacent(scout, attachment)) {
+        episode.active = false;
+        episode.state = "returned-with-value";
+        this.tetheredScoutDiagnostics.returns += 1;
+        this.tetheredScoutDiagnostics.successfulReturns += 1;
+        bond.elasticScout = false;
+        this.emitCollectivePulse(scout, "scout-return", Math.min(1, policy.returnPulseStrength * episode.valueCollected), { x: scout.x, y: scout.y });
+      }
+    }
+  }
+
+  recordTetheredScoutValue(organism, energy) {
+    if (energy <= 0) return;
+    const episode = this.tetheredScoutEpisodes.get(String(organism.id));
+    if (!episode?.active) return;
+    episode.valueCollected = Math.min(1, (episode.valueCollected ?? 0) + energy / 10);
+    episode.state = "value-found";
+    this.tetheredScoutDiagnostics.valueFinds += 1;
   }
 
   getTopologyMotifSignature(memberIds) {
@@ -1414,6 +1502,8 @@ export class Simulation {
       leashViolations: 0,
       energyAborts: 0,
       timeoutAborts: 0
+      ,valueFinds: 0
+      ,successfulReturns: 0
     };
     this.bondGroupsCache = null;
     this.bondCandidates.clear();
@@ -3710,6 +3800,16 @@ export class Simulation {
     return wrappedX <= 2 && wrappedY <= 2;
   }
 
+  isElasticTetherBondWithinLeash(bond) {
+    if (!bond?.elasticScout) return false;
+    const policy = this.config.bond.topologyMemory?.tetheredScout;
+    if (!policy?.enabled || !policy.elasticEnabled) return false;
+    const first = this.organisms.find((organism) => organism.id === bond.firstId);
+    const second = this.organisms.find((organism) => organism.id === bond.secondId);
+    if (!first || !second || !first.alive || !second.alive) return false;
+    return this.distanceBetweenPositions(first, second) <= policy.leashRadius;
+  }
+
   findAdjacentCandidatePairs(candidates) {
     const cells = new Map();
     for (const candidate of candidates) {
@@ -3880,6 +3980,14 @@ export class Simulation {
         bond.strength = Math.min(1, bond.strength + this.config.bond.repairPerTick * 0.5);
       }
     }
+    const scoutPolicy = this.config.bond.topologyMemory?.tetheredScout;
+    if (this.config.bond.topologyMemory.enabled && scoutPolicy?.enabled && scoutPolicy.elasticEnabled) {
+      for (const [key, bond] of this.bonds) {
+        if (!bond.elasticScout || !this.isElasticTetherBondWithinLeash(bond)) continue;
+        activeKeys.add(key);
+        this.bondCandidates.set(key, Math.max(1, this.bondCandidates.get(key) ?? 0));
+      }
+    }
     for (const key of this.bondCandidates.keys()) {
       if (!activeKeys.has(key)) {
         this.bondCandidates.delete(key);
@@ -3895,7 +4003,8 @@ export class Simulation {
     for (const [key, bond] of this.bonds) {
       const first = byId.get(bond.firstId);
       const second = byId.get(bond.secondId);
-      if (!first || !second || !first.alive || !second.alive || !this.areAdjacent(first, second)) {
+      if (!first || !second || !first.alive || !second.alive
+        || (!this.areAdjacent(first, second) && !this.isElasticTetherBondWithinLeash(bond))) {
         this.bonds.delete(key);
         const deadMember = first && !first.alive ? first : second && !second.alive ? second : null;
         const reason = deadMember ? `organism #${deadMember.id} died: ${deadMember.deathReason ?? "unknown cause"}`
