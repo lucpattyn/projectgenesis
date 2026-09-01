@@ -61,6 +61,16 @@ export class Simulation {
     this.topologyMotifs = new Map();
     this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
     this.topologyStableTicks = new Map();
+    this.tetheredScoutEpisodes = new Map();
+    this.tetheredScoutDiagnostics = {
+      eligibleScouts: 0,
+      activeEpisodes: 0,
+      departures: 0,
+      returns: 0,
+      leashViolations: 0,
+      energyAborts: 0,
+      timeoutAborts: 0
+    };
     this.bondGroupsCache = null;
     this.bondCandidates = new Map();
     this.structuralBirthSeeds = new Map();
@@ -344,6 +354,9 @@ export class Simulation {
     this.handleReproduction();
     this.handleAutonomousFacetBudding();
     this.updateBonds();
+    // Scout detection is observational in this stage; no movement or bond
+    // state is changed until the tethered-scout intervention is separately tested.
+    this.updateTetheredScoutDiagnostics();
     this.recordGateCycleReserveMaintenance();
     this.recordComponentEpisodeMigrationReserveMaintenance();
     this.recordComponentEpisodePhaseReserveMaintenance();
@@ -410,6 +423,63 @@ export class Simulation {
     this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
     for (const role of roles.values()) this.topologyRoleCounts[role] += 1;
     return roles;
+  }
+
+  getTetheredScoutCandidates() {
+    const policy = this.config.bond.topologyMemory?.tetheredScout;
+    if (!policy?.enabled) return [];
+    const roles = this.getTopologyRoleMap();
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const candidates = [];
+    for (const group of this.getBondGroups()) {
+      if (group.length < policy.minimumCoreSize) continue;
+      const groupSet = new Set(group);
+      const adjacent = new Map(group.map((id) => [id, []]));
+      for (const bond of this.bonds.values()) {
+        if (groupSet.has(bond.firstId) && groupSet.has(bond.secondId)) {
+          adjacent.get(bond.firstId).push(bond.secondId);
+          adjacent.get(bond.secondId).push(bond.firstId);
+        }
+      }
+      for (const [id, neighbors] of adjacent) {
+        if (roles.get(id) !== "terminal" || !neighbors.some((neighborId) => roles.get(neighborId) === "core")) continue;
+        const scout = byId.get(id);
+        if (!scout || scout.energy < policy.energyFloor) continue;
+        const attachmentId = neighbors.find((neighborId) => roles.get(neighborId) === "core");
+        candidates.push({ scout, attachment: byId.get(attachmentId), componentIds: group });
+      }
+    }
+    return candidates.filter((candidate) => candidate.attachment);
+  }
+
+  updateTetheredScoutDiagnostics() {
+    const policy = this.config.bond.topologyMemory?.tetheredScout;
+    if (!policy?.enabled) return;
+    const candidates = this.getTetheredScoutCandidates();
+    const currentIds = new Set(candidates.map((candidate) => candidate.scout.id));
+    this.tetheredScoutDiagnostics.eligibleScouts = candidates.length;
+    this.tetheredScoutDiagnostics.activeEpisodes = [...this.tetheredScoutEpisodes.values()]
+      .filter((episode) => episode.active).length;
+    for (const candidate of candidates) {
+      const key = String(candidate.scout.id);
+      if (!this.tetheredScoutEpisodes.has(key)) {
+        this.tetheredScoutEpisodes.set(key, {
+          scoutId: candidate.scout.id,
+          attachmentId: candidate.attachment.id,
+          startedTick: this.simulationTicks,
+          active: false,
+          state: "eligible",
+          distanceFromAttachment: 0,
+          componentSize: candidate.componentIds.length
+        });
+      }
+    }
+    for (const [key, episode] of this.tetheredScoutEpisodes) {
+      if (!currentIds.has(Number(key)) && episode.active) {
+        episode.active = false;
+        episode.state = "ineligible";
+      }
+    }
   }
 
   getTopologyMotifSignature(memberIds) {
@@ -1335,6 +1405,16 @@ export class Simulation {
     this.topologyMotifs.clear();
     this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
     this.topologyStableTicks.clear();
+    this.tetheredScoutEpisodes.clear();
+    this.tetheredScoutDiagnostics = {
+      eligibleScouts: 0,
+      activeEpisodes: 0,
+      departures: 0,
+      returns: 0,
+      leashViolations: 0,
+      energyAborts: 0,
+      timeoutAborts: 0
+    };
     this.bondGroupsCache = null;
     this.bondCandidates.clear();
     this.structuralBirthSeeds.clear();
@@ -4089,7 +4169,12 @@ export class Simulation {
           motifCount: this.topologyMotifs.size,
           consolidatedMotifs: [...this.topologyMotifs.values()].filter((motif) => motif.trace >= this.config.bond.topologyMemory.motifConsolidationThreshold).length,
           roles: { ...this.topologyRoleCounts },
-          topologyTraces: [...this.bonds.values()].filter((bond) => (bond.topologyTrace ?? 0) > 0.001).length
+          topologyTraces: [...this.bonds.values()].filter((bond) => (bond.topologyTrace ?? 0) > 0.001).length,
+          tetheredScout: {
+            ...this.config.bond.topologyMemory.tetheredScout,
+            ...this.tetheredScoutDiagnostics,
+            episodes: [...this.tetheredScoutEpisodes.values()].slice(-32)
+          }
         }
       },
       facetCapital: {

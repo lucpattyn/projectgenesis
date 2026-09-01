@@ -347,7 +347,14 @@ export const BASE_CONFIG = {
       stableTicksRequired: 12,
       reproductionReserve: 8,
       inheritanceFraction: 0.12,
-      inheritanceNoise: 0.02
+      inheritanceNoise: 0.02,
+      tetheredScout: {
+        enabled: true,
+        maximumExcursionTicks: 24,
+        leashRadius: 2,
+        energyFloor: 6,
+        minimumCoreSize: 3
+      }
     },
     buddingReserveInvestment: 1.2,
     buddingCandidateTicks: 3

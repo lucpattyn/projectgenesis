@@ -59,9 +59,13 @@ Do not introduce free energy, privileged shape names, global targets, teleportat
 6. **Local reserve recycling.** When a member dies or a tail is shed, recover only a bounded lossy fraction of its existing bond reserve / stored recoverable energy into nearby component reserve or physical local residue. Do not create energy and do not make dead members a global subsidy.
 7. **Re-seeding test.** Run seeds `160103–160105` for 2,000 ticks after each isolated intervention. Report final surviving components, longest cyclic-core lifetime, births before age death, starvation deaths, tail releases, successful scout returns, reserve inflow/outflow, and reproduction timing. Compare each step against the current commit with `bond.topologyMemory` both off and on.
 
-### Recommended first task tomorrow
+### Scout stage completed (2026-09-01)
 
-Implement only **tethered scout eligibility plus episode diagnostics** first. Do not yet change energy allocation, reproduction, or edge removal. Verify that a terminal can perform bounded local exploration without breaking its attachment or altering ecology when no eligible core exists. Then add return-path pulses in a separate commit and run the first matched 800-tick screen.
+The first narrow step is now implemented in the current worktree: graph-derived tethered-scout eligibility and episode diagnostics. It is observational only; no scout moves independently, no bond is changed, and no energy is transferred. A 300-tick null-intervention check with seed `160103` matched exactly with diagnostics disabled: population 39, bonds 75, facets 92, births/deaths and bond breaks identical. The diagnostic run recorded 18 candidate episodes over the interval.
+
+### Next task
+
+Add return-path episode state and pulse rewards as a separate commit. Begin with local movement constrained by the configured leash, excursion timer, and scout energy floor. Only a scout that finds real food or a useful gate signal and returns to its attachment should reinforce the path. Do not change reserve allocation or implement edge shedding in that commit; rerun the null intervention first, then the enabled 800-tick comparison.
 
 ### Useful commands
 
