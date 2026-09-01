@@ -438,6 +438,19 @@ export class Simulation {
     for (const group of this.getBondGroups()) {
       if (group.length < policy.minimumCoreSize) continue;
       const groupSet = new Set(group);
+      const internalBonds = [...this.bonds.values()].filter((bond) => groupSet.has(bond.firstId) && groupSet.has(bond.secondId));
+      const cycleRank = Math.max(0, internalBonds.length - group.length + 1);
+      const coreIds = group.filter((id) => roles.get(id) === "core");
+      const coreBonds = internalBonds.filter((bond) => coreIds.includes(bond.firstId) && coreIds.includes(bond.secondId));
+      const coreStrength = coreBonds.length
+        ? average(coreBonds.map((bond) => bond.strength ?? 0))
+        : 0;
+      const componentReserve = this.componentReserves.get(this.componentReserveKey(group)) ?? 0;
+      if (internalBonds.length < policy.minimumCoreBonds
+        || cycleRank < policy.minimumCoreCycleRank
+        || coreIds.length < policy.minimumCoreSize
+        || coreStrength < policy.minimumCoreStrength
+        || componentReserve < policy.minimumCoreReserve) continue;
       const adjacent = new Map(group.map((id) => [id, []]));
       for (const bond of this.bonds.values()) {
         if (groupSet.has(bond.firstId) && groupSet.has(bond.secondId)) {

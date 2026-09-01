@@ -40,6 +40,8 @@ The first scout stage is observational: the server identifies degree-one termina
 
 The experimental elastic-tether mode is now implemented but remains off by default (`bond.topologyMemory.tetheredScout.elasticEnabled: false`). It permits one eligible terminal to make bounded local moves, records value-bearing returns, and emits a return pulse. The initial 800-tick seed-`160103` screen was too disruptive (93 departures, 31 returns, 14 bonds/7 facets at the endpoint). Requiring shared reserve, reducing departure probability, and adding a return cooldown produced 1 departure and 1 successful return, with 47 bonds/49 facets and 21 energy-exhaustion deaths at the endpoint. This remains a promising but single-seed tuning result.
 
+Scout eligibility now also requires a redundant core: minimum internal bonds, positive cycle rank, enough cyclic-core members, minimum core bond strength, and a larger shared reserve. In a 1,200-tick seed-`160103` screen this raised the early peak to 97 bonds/88 facets and limited excursions to 2 departures/1 successful return. Endpoint survival remains mixed, so the mode stays experimental and opt-in.
+
 ## Historical foundations: Phases 13–15.5
 
 Phase 14 added distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.
