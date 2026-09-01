@@ -501,9 +501,15 @@ export class Simulation {
       let episode = this.tetheredScoutEpisodes.get(episodeKey);
       if (episode?.active) {
         activeComponents.add(componentKey);
-      } else if (activeComponents.has(componentKey) || scout.energy < policy.energyFloor + policy.excursionMovementCost) {
-        continue;
       } else {
+        const componentReserve = this.componentReserves.get(componentKey) ?? 0;
+        const cooldownElapsed = episode?.lastEndedTick === undefined
+          || this.simulationTicks - episode.lastEndedTick >= policy.returnCooldownTicks;
+        if (activeComponents.has(componentKey)
+          || scout.energy < policy.energyFloor + policy.excursionMovementCost
+          || componentReserve < policy.minimumComponentReserve
+          || !cooldownElapsed
+          || this.random() > policy.departureProbability) continue;
         episode = {
           scoutId: scout.id,
           attachmentId: attachment.id,
@@ -512,7 +518,8 @@ export class Simulation {
           state: "exploring",
           valueCollected: 0,
           distanceFromAttachment: 0,
-          componentSize: componentIds.length
+          componentSize: componentIds.length,
+          lastEndedTick: episode?.lastEndedTick ?? null
         };
         this.tetheredScoutEpisodes.set(episodeKey, episode);
         bond.elasticScout = true;
@@ -523,6 +530,7 @@ export class Simulation {
       if (elapsed >= policy.maximumExcursionTicks) {
         episode.active = false;
         episode.state = "timeout";
+        episode.lastEndedTick = this.simulationTicks;
         this.tetheredScoutDiagnostics.timeoutAborts += 1;
         bond.elasticScout = false;
         continue;
@@ -553,6 +561,7 @@ export class Simulation {
       if (episode.valueCollected > 0 && this.areAdjacent(scout, attachment)) {
         episode.active = false;
         episode.state = "returned-with-value";
+        episode.lastEndedTick = this.simulationTicks;
         this.tetheredScoutDiagnostics.returns += 1;
         this.tetheredScoutDiagnostics.successfulReturns += 1;
         bond.elasticScout = false;

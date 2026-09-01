@@ -65,7 +65,7 @@ The first narrow step is now implemented in the current worktree: graph-derived 
 
 ### Next task
 
-Return-path episode state and pulse rewards are now implemented as an opt-in elastic-tether mode. In the first 800-tick seed-`160103` run, scouts made 93 departures and 31 successful value-bearing returns, but endpoint structure fell from 55 bonds/37 facets with elastic mode off to 14/7 with it on. Keep `elasticEnabled: false` in live runs. Next tune excursion cadence/tether cost and require adequate component reserve before departure; do not add edge shedding until this mode no longer harms core persistence.
+Return-path episode state and pulse rewards are now implemented as an opt-in elastic-tether mode. The initial 800-tick seed-`160103` run was too disruptive (93 departures, 31 returns, 14 bonds/7 facets). After requiring shared reserve, reducing departure probability to `0.08`, and adding a 24-tick return cooldown, the same run produced 1 departure and 1 successful return, ending with 47 bonds/49 facets and 21 energy-exhaustion deaths. Keep `elasticEnabled: false` in live runs until this holds across multiple seeds. Next add no edge shedding yet; first run the 3-seed 1,500–2,000 tick comparison and inspect whether the return reward is actually replenishing component reserve.
 
 ### Useful commands
 

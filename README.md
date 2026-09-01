@@ -38,7 +38,7 @@ The reserve budget follows a strict survival order: source survival floor, prote
 
 The first scout stage is observational: the server identifies degree-one terminals attached to cyclic cores and records bounded tethered-scout eligibility/episode state, but does not yet move scouts independently or alter bonds. This null-intervention boundary was verified against seed `160103`; enabling the diagnostics produced identical ecology over 300 ticks. Return-path movement and reinforcement are the next separately tested intervention.
 
-The experimental elastic-tether mode is now implemented but remains off by default (`bond.topologyMemory.tetheredScout.elasticEnabled: false`). It permits one eligible terminal to make bounded local moves, records value-bearing returns, and emits a return pulse. In the first 800-tick seed-`160103` screen it produced 93 departures and 31 successful returns, but reduced endpoint structure from 55 bonds/37 facets to 14/7. This is a useful negative result: excursion frequency or tether cost must be tuned before enabling it live.
+The experimental elastic-tether mode is now implemented but remains off by default (`bond.topologyMemory.tetheredScout.elasticEnabled: false`). It permits one eligible terminal to make bounded local moves, records value-bearing returns, and emits a return pulse. The initial 800-tick seed-`160103` screen was too disruptive (93 departures, 31 returns, 14 bonds/7 facets at the endpoint). Requiring shared reserve, reducing departure probability, and adding a return cooldown produced 1 departure and 1 successful return, with 47 bonds/49 facets and 21 energy-exhaustion deaths at the endpoint. This remains a promising but single-seed tuning result.
 
 ## Historical foundations: Phases 13–15.5
 

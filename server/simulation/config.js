@@ -357,7 +357,10 @@ export const BASE_CONFIG = {
         elasticEnabled: false,
         excursionMovementCost: 0.15,
         returnPulseStrength: 0.9,
-        returnReserveFraction: 0.12
+        returnReserveFraction: 0.12,
+        departureProbability: 0.08,
+        minimumComponentReserve: 3,
+        returnCooldownTicks: 24
       }
     },
     buddingReserveInvestment: 1.2,
