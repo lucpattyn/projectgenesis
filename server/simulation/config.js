@@ -348,6 +348,15 @@ export const BASE_CONFIG = {
       reproductionReserve: 8,
       inheritanceFraction: 0.12,
       inheritanceNoise: 0.02,
+      facetMemory: {
+        enabled: true,
+        maximumTrace: 1,
+        traceDecayRate: 0.985,
+        reinforcementStrength: 0.1,
+        consolidationThreshold: 0.35,
+        stableTicksRequired: 8,
+        maintenanceBias: 0.12
+      },
       tetheredScout: {
         enabled: true,
         maximumExcursionTicks: 24,

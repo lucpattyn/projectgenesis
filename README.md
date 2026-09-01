@@ -42,6 +42,8 @@ The experimental elastic-tether mode is now implemented but remains off by defau
 
 Scout eligibility now also requires a redundant core: minimum internal bonds, positive cycle rank, enough cyclic-core members, minimum core bond strength, and a larger shared reserve. In a 1,200-tick seed-`160103` screen this raised the early peak to 97 bonds/88 facets and limited excursions to 2 departures/1 successful return. Endpoint survival remains mixed, so the mode stays experimental and opt-in.
 
+Facet-local memory combines each facet's internal cycle with the sorted external attachment degrees. Only collective successes reinforce that record, at most once per tick; ordinary individual food pulses do not saturate every triangle. A later facet can rediscover the trace when the same local topology reappears, while decay and attachment changes make the memory forgetful.
+
 ## Historical foundations: Phases 13–15.5
 
 Phase 14 added distributed state without introducing a new prime. Prime 13 retains an organism's prior-tick state, and Prime 31 exposes that value one active bond hop away as an anonymous generated graph input. Phase 13 ecological differentiation remains active: food has green, blue, and red resource identities, and every tile has locally exhaustible fertility.

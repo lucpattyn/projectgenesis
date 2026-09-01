@@ -61,6 +61,8 @@ export class Simulation {
     this.topologyMotifs = new Map();
     this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
     this.topologyStableTicks = new Map();
+    this.facetMotifMemory = new Map();
+    this.facetMotifStableTicks = new Map();
     this.tetheredScoutEpisodes = new Map();
     this.tetheredScoutDiagnostics = {
       eligibleScouts: 0,
@@ -607,6 +609,14 @@ export class Simulation {
     return `${ids.length}|${bondCount}|${cycleRank}|${[...degrees.values()].sort((a, b) => a - b).join(",")}`;
   }
 
+  getFacetMotifSignature(facet) {
+    const ids = new Set(facet.memberIds);
+    const externalDegrees = facet.memberIds.map((id) => [...this.bonds.values()]
+      .filter((bond) => (bond.firstId === id && !ids.has(bond.secondId)) || (bond.secondId === id && !ids.has(bond.firstId))).length)
+      .sort((a, b) => a - b);
+    return `${this.getTopologyMotifSignature(facet.memberIds)}|external:${externalDegrees.join(",")}`;
+  }
+
   recordTopologyPulse(source, event, strength, distance) {
     const policy = this.config.bond.topologyMemory;
     if (!policy?.enabled) return;
@@ -635,6 +645,26 @@ export class Simulation {
         + strength * policy.reinforcementStrength * Math.pow(policy.pulseAttenuationPerHop, hops));
       bond.topologyLastPulseTick = this.simulationTicks;
     }
+    this.recordFacetMotifPulse(source, event, strength);
+  }
+
+  recordFacetMotifPulse(source, event, strength) {
+    const policy = this.config.bond.topologyMemory?.facetMemory;
+    if (!policy?.enabled) return;
+    if (!["gate", "migration", "scout-return", "member-support", "reproduction"].includes(event)) return;
+    for (const facet of this.getFacets()) {
+      if (!facet.memberIds.includes(source.id)) continue;
+      const signature = this.getFacetMotifSignature(facet);
+      const memory = this.facetMotifMemory.get(signature) ?? {
+        signature, trace: 0, successes: 0, lastSuccessTick: null, lastEvent: event
+      };
+      if (memory.lastSuccessTick === this.simulationTicks) continue;
+      memory.trace = Math.min(policy.maximumTrace, memory.trace + strength * policy.reinforcementStrength);
+      memory.successes += 1;
+      memory.lastSuccessTick = this.simulationTicks;
+      memory.lastEvent = event;
+      this.facetMotifMemory.set(signature, memory);
+    }
   }
 
   updateTopologyMemory() {
@@ -650,6 +680,17 @@ export class Simulation {
     for (const [signature, motif] of this.topologyMotifs) {
       motif.trace *= policy.motifForgettingRate;
       if (!activeSignatures.has(signature) && motif.trace < 0.01) this.topologyMotifs.delete(signature);
+    }
+    const facetPolicy = policy.facetMemory;
+    if (facetPolicy?.enabled) {
+      const activeFacetSignatures = new Set(this.getFacets().map((facet) => this.getFacetMotifSignature(facet)));
+      for (const signature of activeFacetSignatures) {
+        this.facetMotifStableTicks.set(signature, (this.facetMotifStableTicks.get(signature) ?? 0) + 1);
+      }
+      for (const [signature, memory] of this.facetMotifMemory) {
+        memory.trace *= facetPolicy.traceDecayRate;
+        if (!activeFacetSignatures.has(signature) && memory.trace < 0.01) this.facetMotifMemory.delete(signature);
+      }
     }
     for (const bond of this.bonds.values()) bond.topologyTrace = (bond.topologyTrace ?? 0) * policy.traceDecayRate;
     this.getTopologyRoleMap();
@@ -1515,6 +1556,8 @@ export class Simulation {
     this.topologyMotifs.clear();
     this.topologyRoleCounts = { terminal: 0, hub: 0, core: 0, interior: 0 };
     this.topologyStableTicks.clear();
+    this.facetMotifMemory.clear();
+    this.facetMotifStableTicks.clear();
     this.tetheredScoutEpisodes.clear();
     this.tetheredScoutDiagnostics = {
       eligibleScouts: 0,
@@ -3977,12 +4020,29 @@ export class Simulation {
             && (this.topologyStableTicks.get(motif.signature) ?? 0) >= topologyPolicy.stableTicksRequired)
           .map((motif) => motif.signature))
         : new Set();
+      const facetMemoryPolicy = topologyPolicy?.facetMemory;
+      const facetProtectedKeys = new Set();
+      if (facetMemoryPolicy?.enabled) {
+        for (const facet of this.getFacets()) {
+          const signature = this.getFacetMotifSignature(facet);
+          const memory = this.facetMotifMemory.get(signature);
+          const stable = (this.facetMotifStableTicks.get(signature) ?? 0) >= facetMemoryPolicy.stableTicksRequired;
+          if (memory?.trace >= facetMemoryPolicy.consolidationThreshold && stable) {
+            for (let index = 0; index < facet.memberIds.length; index += 1) {
+              for (let next = index + 1; next < facet.memberIds.length; next += 1) {
+                facetProtectedKeys.add(this.bondKey(facet.memberIds[index], facet.memberIds[next]));
+              }
+            }
+          }
+        }
+      }
       for (const [key, bond] of this.bonds) {
         const first = byId.get(bond.firstId);
         const second = byId.get(bond.secondId);
         const group = first && this.getBondGroups().find((memberIds) => memberIds.includes(first.id));
         const motifSignature = group ? this.getTopologyMotifSignature(group) : null;
         const motifProtected = Boolean(topologyPolicy?.enabled && consolidatedSignatures.has(motifSignature));
+        const facetProtected = facetProtectedKeys.has(key);
         const pathRecentlySupported = Boolean(topologyPolicy?.enabled
           && (bond.topologyTrace ?? 0) >= topologyPolicy.edgeCommitmentThreshold);
         const componentReserve = group
@@ -3994,7 +4054,7 @@ export class Simulation {
           return member && member.energy >= this.config.bond.supportThreshold;
         }));
         const isRecentlySupported = (bond.componentCommitment ?? 0) >= componentReservePolicy.commitmentThreshold
-          || (hasSharedReserve && (pathRecentlySupported || motifProtected));
+          || (hasSharedReserve && (pathRecentlySupported || motifProtected || facetProtected));
         const hasUsableReserve = (bond.reserve ?? 0) >= componentReservePolicy.commitmentReserveFloor;
         if (!first || !second || !this.areAdjacent(first, second) || !isRecentlySupported || !hasUsableReserve || !membersSafe) continue;
         activeKeys.add(key);
@@ -4301,6 +4361,12 @@ export class Simulation {
           consolidatedMotifs: [...this.topologyMotifs.values()].filter((motif) => motif.trace >= this.config.bond.topologyMemory.motifConsolidationThreshold).length,
           roles: { ...this.topologyRoleCounts },
           topologyTraces: [...this.bonds.values()].filter((bond) => (bond.topologyTrace ?? 0) > 0.001).length,
+          facetMemory: {
+            ...this.config.bond.topologyMemory.facetMemory,
+            memoryCount: this.facetMotifMemory.size,
+            consolidated: [...this.facetMotifMemory.values()].filter((memory) => memory.trace >= this.config.bond.topologyMemory.facetMemory.consolidationThreshold).length,
+            activeFacets: this.getFacets().length
+          },
           tetheredScout: {
             ...this.config.bond.topologyMemory.tetheredScout,
             ...this.tetheredScoutDiagnostics,
