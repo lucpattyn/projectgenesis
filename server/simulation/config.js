@@ -348,6 +348,16 @@ export const BASE_CONFIG = {
       reproductionReserve: 8,
       inheritanceFraction: 0.12,
       inheritanceNoise: 0.02,
+      proactiveReproduction: {
+        enabled: true,
+        reserveThreshold: 8,
+        postBirthReserve: 3,
+        reserveInvestment: 1,
+        memberEnergyFloor: 6,
+        cooldownTicks: 160,
+        maxBirthsPerTick: 1,
+        maxTotalBirths: 8
+      },
       facetMemory: {
         enabled: true,
         maximumTrace: 1,

@@ -223,3 +223,14 @@ routing bias. Pulses never create energy, override legal movement, or privilege
 a named geometric shape. The current implementation covers food, gate
 completion, migration arrival, reproduction, and member-support pulses;
 inheritance/consolidation diagnostics are intentionally staged for later work.
+
+### Proactive topology reproduction (experimental)
+
+When topology memory is enabled, a stable, repeatedly useful facet may fund a
+local child from its component reserve before age-driven reproduction occurs.
+The birth requires real reserve above a post-birth buffer, an energy floor for
+all facet members, a free adjacent site, and a cooldown. A small reserve
+investment seeds two bonds and the child receives only bounded local trace
+inheritance. Births are capped per tick and per run; no energy is created and
+ordinary adjacency, reserve, and lifecycle rules still apply. This keeps the
+mechanism topology-native rather than selecting named shapes.

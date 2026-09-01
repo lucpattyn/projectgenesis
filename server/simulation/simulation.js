@@ -133,6 +133,10 @@ export class Simulation {
     this.facetHarvestReserveEnergy = 0;
     this.facetBirths = 0;
     this.autonomousFacetBirths = 0;
+    this.topologyProactiveBirths = 0;
+    this.topologyProactiveBirthAttempts = 0;
+    this.topologyProactiveBirthDenied = { reserve: 0, memory: 0, energy: 0, cooldown: 0, site: 0 };
+    this.topologyProactiveBirthTicks = new Map();
     this.facetBuddingLedgers = new Map();
     this.autonomousFacetBuddingDenied = { cooldown: 0, componentEnergy: 0, completedCycle: 0 };
     this.facetReserveSpent = 0;
@@ -359,6 +363,7 @@ export class Simulation {
     this.updateCourierExchange();
     this.handleReproduction();
     this.handleAutonomousFacetBudding();
+    this.handleTopologyProactiveReproduction();
     this.updateBonds();
     // Scout detection is observational in this stage; no movement or bond
     // state is changed until the tethered-scout intervention is separately tested.
@@ -871,6 +876,85 @@ export class Simulation {
       }
     }
 
+    this.organisms.push(...newborns);
+  }
+
+  handleTopologyProactiveReproduction() {
+    const topology = this.config.bond.topologyMemory;
+    const policy = topology?.proactiveReproduction;
+    if (!topology?.enabled || !policy?.enabled) return;
+    const facetPolicy = topology.facetMemory;
+    const byId = new Map(this.organisms.filter((organism) => organism.alive).map((organism) => [organism.id, organism]));
+    const occupied = new Set(this.organisms.filter((organism) => organism.alive).map((organism) => `${organism.x},${organism.y}`));
+    const candidates = this.getFacets()
+      .map((facet) => ({ ...facet, strength: this.getFacetStrength(facet.memberIds), motif: this.getFacetMotifSignature(facet) }))
+      .filter((facet) => facet.strength >= this.config.facet.minimumBondStrength)
+      .sort((a, b) => (this.componentReserves.get(this.componentReserveKey(b.memberIds)) ?? 0)
+        - (this.componentReserves.get(this.componentReserveKey(a.memberIds)) ?? 0));
+    const newborns = [];
+    for (const facet of candidates) {
+      if (newborns.length >= Math.max(1, policy.maxBirthsPerTick)) break;
+      if (this.topologyProactiveBirths >= Math.max(0, policy.maxTotalBirths)) break;
+      this.topologyProactiveBirthAttempts += 1;
+      const group = this.getBondGroups().find((memberIds) => facet.memberIds.every((id) => memberIds.includes(id)));
+      const componentMotif = group ? this.getTopologyMotifSignature(group) : null;
+      const facetMemory = this.facetMotifMemory.get(facet.motif);
+      const componentMemory = componentMotif ? this.topologyMotifs.get(componentMotif) : null;
+      const facetConsolidated = facetMemory && facetMemory.trace >= facetPolicy.consolidationThreshold
+        && (this.facetMotifStableTicks.get(facet.motif) ?? 0) >= facetPolicy.stableTicksRequired;
+      const componentConsolidated = componentMemory && componentMemory.trace >= topology.motifConsolidationThreshold
+        && (this.topologyStableTicks.get(componentMotif) ?? 0) >= topology.stableTicksRequired;
+      if (!facetConsolidated && !componentConsolidated) {
+        this.topologyProactiveBirthDenied.memory += 1;
+        continue;
+      }
+      const key = this.componentReserveKey(facet.memberIds);
+      const reserve = this.componentReserves.get(key) ?? 0;
+      if (reserve < policy.reserveThreshold + policy.postBirthReserve + policy.reserveInvestment) {
+        this.topologyProactiveBirthDenied.reserve += 1;
+        continue;
+      }
+      const birthKey = componentMotif ?? facet.motif;
+      const lastBirth = this.topologyProactiveBirthTicks.get(birthKey) ?? -Infinity;
+      if (this.simulationTicks - lastBirth < policy.cooldownTicks) {
+        this.topologyProactiveBirthDenied.cooldown += 1;
+        continue;
+      }
+      const members = facet.memberIds.map((id) => byId.get(id)).filter(Boolean);
+      if (members.length !== facet.memberIds.length || members.some((member) => member.energy < policy.memberEnergyFloor)) {
+        this.topologyProactiveBirthDenied.energy += 1;
+        continue;
+      }
+      const parent = [...members].sort((a, b) => b.energy - a.energy)[0];
+      const birthSite = this.findFacetBirthSite(parent, facet, occupied);
+      if (!birthSite) {
+        this.topologyProactiveBirthDenied.site += 1;
+        continue;
+      }
+      const child = parent.reproduce(this.nextOrganismId, birthSite.position, this.config.organism, {
+        genomeEngine: this.genomeEngine, brainGenerator: this.brainGenerator, mutationEngine: this.mutationEngine
+      });
+      child.nodeTrace = Math.max(0, Math.min(topology.maximumTrace,
+        parent.nodeTrace * topology.inheritanceFraction + (parent.random() - 0.5) * topology.inheritanceNoise));
+      this.componentReserves.set(key, reserve - policy.reserveInvestment);
+      this.componentReserveWithdrawn += policy.reserveInvestment;
+      this.facetReserveSpent += policy.reserveInvestment;
+      this.structuralSeedEnergy += policy.reserveInvestment;
+      this.seedStructuralBond(parent.id, child.id, policy.reserveInvestment / 2);
+      this.seedStructuralBond(birthSite.partner.id, child.id, policy.reserveInvestment / 2);
+      this.recordEnergyAllocation(parent, "structuralSeed", policy.reserveInvestment);
+      this.energyEconomics.allocations.reproduction += child.energy;
+      this.nextOrganismId += 1;
+      newborns.push(child);
+      occupied.add(`${child.x},${child.y}`);
+      this.births += 1;
+      this.structuralBirths += 1;
+      this.topologyProactiveBirths += 1;
+      this.topologyProactiveBirthTicks.set(birthKey, this.simulationTicks);
+      this.birthMarkers.push({ x: child.x, y: child.y, ttl: 10 });
+      this.emitCollectivePulse(parent, "reproduction", 0.9, birthSite.position);
+      this.recordTelemetry("topology-proactive-birth", `Stable facet ${facet.motif} funded local child #${child.id} from ${policy.reserveInvestment.toFixed(1)} reserve.`);
+    }
     this.organisms.push(...newborns);
   }
 
@@ -1631,6 +1715,10 @@ export class Simulation {
     this.facetBirths = 0;
     this.autonomousFacetBirths = 0;
     this.facetBuddingLedgers.clear();
+    this.topologyProactiveBirths = 0;
+    this.topologyProactiveBirthAttempts = 0;
+    this.topologyProactiveBirthDenied = { reserve: 0, memory: 0, energy: 0, cooldown: 0, site: 0 };
+    this.topologyProactiveBirthTicks.clear();
     this.autonomousFacetBuddingDenied = { cooldown: 0, componentEnergy: 0, completedCycle: 0 };
     this.facetReserveSpent = 0;
     this.bondsFed = 0;
@@ -4389,6 +4477,12 @@ export class Simulation {
         births: this.autonomousFacetBirths,
         denials: { ...this.autonomousFacetBuddingDenied },
         ledgers: [...this.facetBuddingLedgers.values()].map((ledger) => ({ ...ledger }))
+      },
+      topologyProactiveReproduction: {
+        ...this.config.bond.topologyMemory.proactiveReproduction,
+        births: this.topologyProactiveBirths,
+        attempts: this.topologyProactiveBirthAttempts,
+        denials: { ...this.topologyProactiveBirthDenied }
       },
       primaryProduction: {
         source: "Fertility-driven resource regrowth",
