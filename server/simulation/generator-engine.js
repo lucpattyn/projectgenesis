@@ -49,7 +49,7 @@ export const WORLD_PRIME_REGISTRY = new PrimeRegistry()
     apply(config) {
       config.organism.startingEnergy = 60;
       config.organism.idleCost = 0.15;
-      config.organism.maxAge = 600;
+      config.organism.maxAge = 750;
     }
   })
   .register(5, {

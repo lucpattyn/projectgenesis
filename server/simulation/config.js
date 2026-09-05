@@ -332,7 +332,7 @@ export const BASE_CONFIG = {
       maximumLocationRecords: 128
     },
     topologyMemory: {
-      enabled: false,
+      enabled: true,
       maximumHops: 12,
       pulseAttenuationPerHop: 0.82,
       traceDecayRate: 0.985,
