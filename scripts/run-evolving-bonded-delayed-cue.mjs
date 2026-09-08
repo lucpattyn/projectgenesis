@@ -5,11 +5,11 @@ const SEEDS = [160112, 160113, 160114, 160115, 160116, 160117, 160118, 160119];
 const POPULATION = Number(process.env.GENESIS_BOND_CUE_POPULATION ?? 16);
 const GENERATIONS = Number(process.env.GENESIS_BOND_CUE_GENERATIONS ?? 30);
 const EPISODES = Number(process.env.GENESIS_BOND_CUE_EPISODES ?? 8);
-const EVAL_EPISODES = Number(process.env.GENESIS_BOND_CUE_EVAL_EPISODES ?? 24);
+const EVAL_EPISODES = Number(process.env.GENESIS_BOND_CUE_EVAL_EPISODES ?? 32);
 const TRAIN_DELAY_MIN = 4;
 const TRAIN_DELAY_MAX = 4;
-const EVAL_DELAY_MIN = 8;
-const EVAL_DELAY_MAX = 16;
+const EVAL_DELAY_MIN = 4;
+const EVAL_DELAY_MAX = 24;
 
 function curriculumDelay(generation) {
   const phase = Math.min(2, Math.floor(generation / Math.max(1, GENERATIONS / 3)));
@@ -116,9 +116,11 @@ function run(seed) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   let population = Array.from({ length: POPULATION }, () => randomParameters(random));
+  const history = [];
   for (let generation = 0; generation < GENERATIONS; generation += 1) {
     const [trainMin, trainMax] = curriculumDelay(generation);
     const ranked = population.map((parameters) => ({ parameters, score: score(parameters, seed + generation * 17, true, EPISODES, trainMin, trainMax) })).sort((a, b) => b.score - a.score);
+    history.push({ generation, delay: trainMin, bestFitness: ranked[0].score });
     const survivors = ranked.slice(0, 8).map((entry) => entry.parameters);
     population = survivors.map((parent) => ({ ...parent }));
     while (population.length < POPULATION) {
@@ -134,8 +136,10 @@ function run(seed) {
     finalTraining: measure(best.parameters, seed + 99991, true, EPISODES, 16, 16),
     unseenLongDelay: measure(best.parameters, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
     unseenCommunicationDisabled: measure(best.parameters, seed + 99991, false, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
+    recurrentPerturbed: measure({ ...best.parameters, senderMemory: 0, receiverMemory: 0 }, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
     idealUnseen: measure(ideal, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
-    parameters: best.parameters
+    parameters: best.parameters,
+    history
   };
 }
 

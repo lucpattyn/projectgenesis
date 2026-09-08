@@ -102,6 +102,21 @@ the result still does not justify claiming robust evolved collective memory.
 
 ## Interpretation
 
+## Larger search replication
+
+The larger validation used the same eight fresh seeds (`160112–160119`) with
+24 candidates, 40 generations, 12 training episodes per generation, and 32
+balanced unseen episodes at randomized delays from 4–24 ticks. It also kept
+the causal controls: communication disabled and recurrent memory weights
+perturbed.
+
+All eight seeds reached 100% training accuracy and 100% unseen accuracy. The
+communication-disabled control remained 50% for every seed. Perturbing the
+recurrent memory path reduced accuracy to 50.0% on six seeds and to 53.1%,
+53.1%, and 59.4% on the other three. This is the first stable multi-seed
+result showing both generalization and a causal dependence on the retained
+state, rather than merely a lucky training trajectory.
+
 Useful memory requires above-chance delayed accuracy on unseen cue sequences and
 fresh seeds, with a causal drop when trace is disabled. This is not evidence of
 collective computation; that claim requires a later interaction control.
