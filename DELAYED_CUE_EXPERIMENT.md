@@ -89,6 +89,17 @@ at 50%. This confirms reachability but rejects the claim of robust evolution.
 The next bottleneck is mutation/search stability and recurrent-state retention,
 not the bond transport path itself.
 
+## Search refinement
+
+The next search used accuracy-dominant shaped fitness (retention is only a
+tie-breaker), elite preservation, eight-parent diversity, gentler mutations,
+occasional sign flips, crossover, and 10% random immigrants. Repeating the
+eight-seed curriculum pilot produced one fully generalizing seed (`160117`,
+100% at unseen 8–16 tick delays), partial above-chance results on `160112`
+(70.8%) and `160114` (58.3%), and chance performance on the remaining seeds.
+Communication-disabled controls stayed at 50%. Search stability improved, but
+the result still does not justify claiming robust evolved collective memory.
+
 ## Interpretation
 
 Useful memory requires above-chance delayed accuracy on unseen cue sequences and

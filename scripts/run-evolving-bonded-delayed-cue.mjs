@@ -46,7 +46,8 @@ function mutate(parent, random) {
   const keys = Object.keys(child);
   const key = keys[Math.floor(random() * keys.length)];
   if (random() < 0.25) child[key] = -child[key];
-  else child[key] = Math.max(-2, Math.min(2, child[key] + (random() - 0.5) * 0.9));
+  else if (random() < 0.04) child[key] = (random() - 0.5) * 2;
+  else child[key] = Math.max(-2, Math.min(2, child[key] + (random() - 0.5) * 0.55));
   return child;
 }
 
@@ -70,7 +71,7 @@ function pair(seed, parameters) {
   return { simulation, sender, receiver };
 }
 
-function score(parameters, seed, communication = true, episodes = EPISODES, delayMin = TRAIN_DELAY_MIN, delayMax = TRAIN_DELAY_MAX, randomCue = false) {
+function measure(parameters, seed, communication = true, episodes = EPISODES, delayMin = TRAIN_DELAY_MIN, delayMax = TRAIN_DELAY_MAX, randomCue = false) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   const simulationPair = pair(seed, parameters);
@@ -83,6 +84,7 @@ function score(parameters, seed, communication = true, episodes = EPISODES, dela
     [cueOrder[index], cueOrder[swap]] = [cueOrder[swap], cueOrder[index]];
   }
   let correct = 0;
+  let retention = 0;
   for (let episode = 0; episode < episodes; episode += 1) {
     simulation.world.signalField = Array.from({ length: simulation.world.height }, () => Array(simulation.world.width).fill(0));
     sender.energy = 150; receiver.energy = 150; sender.age = 0; receiver.age = 0; sender.brainExecution = null; receiver.brainExecution = null;
@@ -98,8 +100,16 @@ function score(parameters, seed, communication = true, episodes = EPISODES, dela
     }
     const response = (receiver.brainExecution?.effectors.signal ?? 0) >= simulation.config.signal.activationThreshold ? 1 : 0;
     if (response === cue) correct += 1;
+    const receiverState = receiver.getPersistentState() ?? 0;
+    retention += cue === 1 ? Math.max(0, Math.min(1, receiverState / 1.8)) : Math.max(0, Math.min(1, 1 - receiverState / 1.8));
   }
-  return correct / episodes;
+  const accuracy = correct / episodes;
+  const retained = retention / episodes;
+  return { accuracy, retained, fitness: accuracy + retained * 0.02 };
+}
+
+function score(parameters, seed, communication = true, episodes = EPISODES, delayMin = TRAIN_DELAY_MIN, delayMax = TRAIN_DELAY_MAX, randomCue = false) {
+  return measure(parameters, seed, communication, episodes, delayMin, delayMax, randomCue).fitness;
 }
 
 function run(seed) {
@@ -109,10 +119,11 @@ function run(seed) {
   for (let generation = 0; generation < GENERATIONS; generation += 1) {
     const [trainMin, trainMax] = curriculumDelay(generation);
     const ranked = population.map((parameters) => ({ parameters, score: score(parameters, seed + generation * 17, true, EPISODES, trainMin, trainMax) })).sort((a, b) => b.score - a.score);
-    const survivors = ranked.slice(0, 5).map((entry) => entry.parameters);
+    const survivors = ranked.slice(0, 8).map((entry) => entry.parameters);
     population = survivors.map((parent) => ({ ...parent }));
     while (population.length < POPULATION) {
-      if (random() < 0.5) population.push(mutate(survivors[Math.floor(random() * survivors.length)], random));
+      if (random() < 0.1) population.push(randomParameters(random));
+      else if (random() < 0.5) population.push(mutate(survivors[Math.floor(random() * survivors.length)], random));
       else population.push(crossover(survivors[Math.floor(random() * survivors.length)], survivors[Math.floor(random() * survivors.length)], random));
     }
   }
@@ -120,10 +131,10 @@ function run(seed) {
   const ideal = { senderInput: 1, senderOutput: 1, senderMemory: 1, receiverInput: 1, receiverOutput: 1, receiverMemory: 1 };
   return {
     seed,
-    finalTraining: best.score,
-    unseenLongDelay: score(best.parameters, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
-    unseenCommunicationDisabled: score(best.parameters, seed + 99991, false, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
-    idealUnseen: score(ideal, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
+    finalTraining: measure(best.parameters, seed + 99991, true, EPISODES, 16, 16),
+    unseenLongDelay: measure(best.parameters, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
+    unseenCommunicationDisabled: measure(best.parameters, seed + 99991, false, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
+    idealUnseen: measure(ideal, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
     parameters: best.parameters
   };
 }
