@@ -9,6 +9,51 @@ const simulation = new Simulation(DEFAULT_CONFIG);
 const publicDir = join(process.cwd(), "public");
 const experimentRunner = new ExperimentRunner(join(process.cwd(), "data", "experiment-history.json"));
 
+// Optional visual bridge for the isolated bonded-memory experiment. It is
+// opt-in so normal Genesis ecology remains unchanged.
+function configureVisualRelayDemo() {
+  simulation.stop();
+  simulation.setSeed(160120);
+  simulation.stop();
+  simulation.organisms = simulation.organisms.slice(0, 3);
+  const [sender, relay, receiver] = simulation.organisms;
+  const brain = (role) => {
+    const source = role === "sender" ? "p19-input" : "p31-neighbor-state";
+    return {
+      nodes: [
+        { id: source, kind: "sensor", prime: role === "sender" ? 19 : 31 },
+        { id: "p13-persistence", kind: "persistent", prime: 13 },
+        { id: "p19-output", kind: "effector", prime: 19 }
+      ],
+      edges: [
+        { from: source, to: "p13-persistence", weight: 1 },
+        { from: "p13-persistence", to: "p13-persistence", weight: 1 },
+        { from: "p13-persistence", to: "p19-output", weight: 1 }
+      ]
+    };
+  };
+  for (const [organism, role, x] of [[sender, "sender", 10], [relay, "relay", 11], [receiver, "receiver", 12]]) {
+    organism.x = x;
+    organism.y = 10;
+    organism.brain = brain(role);
+    organism.energy = 1000;
+  }
+  const bond = (firstId, secondId) => ({
+    firstId, secondId, strength: 1, reserve: 100, bondTrace: 1,
+    componentCommitment: 1, topologyTrace: 0, topologyLastPulseTick: null,
+    lastPulseTick: null, lastPulseEvent: "visual-relay-demo"
+  });
+  simulation.bonds.clear();
+  simulation.bonds.set(simulation.bondKey(sender.id, relay.id), bond(sender.id, relay.id));
+  simulation.bonds.set(simulation.bondKey(relay.id, receiver.id), bond(relay.id, receiver.id));
+  simulation.world.addSignal(sender.x, sender.y, 255, 255);
+  // Keep the diagnostic scene paused so the relay topology is inspectable;
+  // normal mode continues to run exactly as before.
+  simulation.pause();
+}
+
+if (process.env.GENESIS_VISUAL_RELAY === "1") configureVisualRelayDemo();
+
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
