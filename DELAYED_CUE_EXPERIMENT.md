@@ -38,6 +38,17 @@ The initial runnable screen is individual, so communication and topology
 controls are reported as reserved follow-up controls rather than conflated
 with individual delayed memory.
 
+## Real-bond substrate check
+
+`scripts/run-bonded-delayed-cue.mjs` uses two actual Genesis organisms, a real
+bond entry, the production `Organism.act` path, Prime-13 persistent state, and
+Prime-31 neighbor-state transport. Across seeds `160103–160105` at a
+four-tick delay, communication enabled reached 100% accuracy; removing the
+bond message reached 50% chance accuracy. The trace records receiver state and
+response for replay inspection. This validates substrate wiring, not evolved
+communication; the next experiment must evolve sender and receiver organization
+under this real-bond task.
+
 ## Interpretation
 
 Useful memory requires above-chance delayed accuracy on unseen cue sequences and
