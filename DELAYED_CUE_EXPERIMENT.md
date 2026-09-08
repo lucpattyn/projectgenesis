@@ -120,3 +120,18 @@ state, rather than merely a lucky training trajectory.
 Useful memory requires above-chance delayed accuracy on unseen cue sequences and
 fresh seeds, with a causal drop when trace is disabled. This is not evidence of
 collective computation; that claim requires a later interaction control.
+
+## Three-member relay screen
+
+The first scaling step used `scripts/run-group-bonded-memory.mjs`: a sender,
+relay, and receiver connected by two real Genesis bonds. The relay had to carry
+the retained Prime-13 state across the second bond. Bond reserves decayed each
+tick and received a small replenishment from useful recurrent activity; a bond
+would be removed if its reserve reached zero.
+
+Across seeds `160120–160123`, evolved groups achieved **100%, 50%, 50%, and
+100%** accuracy at an eight-tick delay. Communication-disabled controls were
+50% on all seeds. No bonds depleted in this short screen, so this validates the
+multi-hop memory path but does not yet discriminate bond-retention policies.
+The next experiment should lengthen the episode or lower initial reserves so
+bond loss becomes observable without changing the production ecology.
