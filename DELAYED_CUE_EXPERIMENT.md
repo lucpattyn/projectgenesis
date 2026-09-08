@@ -51,7 +51,7 @@ under this real-bond task.
 
 ## Real-bond evolutionary pilot
 
-`scripts/run-evolving-bonded-delayed-cue.mjs` evolves four bounded edge weights
+`scripts/run-evolving-bonded-delayed-cue.mjs` evolves bounded edge weights
 while evaluating through the production executor and real bond state. With 24
 paired candidates, 40 generations, and 12 episodes at a four-tick delay, one of
 three seeds reached 100% accuracy; the other two remained at 50%. In every run
@@ -65,6 +65,18 @@ generations, 8 episodes). All three reached 100% while communication-disabled
 controls remained at 50%. This improves reachability, but it is still a small
 search screen; larger independent runs are required before treating it as an
 evolutionary result.
+
+## Unseen long-delay replication
+
+The next replication used fresh seeds `160109–160111`, 24 candidates, 40
+generations, 12 training episodes at four ticks, and 32 unseen evaluation
+episodes with balanced randomized cue order and delays of 8–16 ticks. The
+sender's output no longer feeds its own environmental signal; a bounded
+heritable recurrent self-connection carries state instead. Training reached
+100% on all three seeds. Unseen long-delay accuracy was **84.4%, 50.0%, and
+50.0%**, while communication-disabled controls were 50% throughout. This is
+promising evidence on one seed, but not yet robust generalization; longer-delay
+memory remains the current bottleneck.
 
 ## Interpretation
 

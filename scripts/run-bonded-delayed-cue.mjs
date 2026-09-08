@@ -19,7 +19,7 @@ function taskBrain(role) {
       { id: "p19-output", label: "Response", kind: "effector", prime: 19 }
     ];
   const source = role === "sender" ? "p19-input" : "p31-neighbor-state";
-  return { status: "Active delayed-cue task graph", nodes, edges: [{ from: source, to: "p13-persistence" }, { from: "p13-persistence", to: "p19-output" }] };
+  return { status: "Active delayed-cue task graph", nodes, edges: [{ from: source, to: "p13-persistence" }, { from: "p13-persistence", to: "p13-persistence", weight: 1 }, ...(role === "receiver" ? [{ from: "p13-persistence", to: "p19-output" }] : [])] };
 }
 
 function makePair(seed) {
