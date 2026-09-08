@@ -4,6 +4,8 @@ const GENERATIONS = Number(process.env.GENESIS_CUE_GENERATIONS ?? 80);
 const POPULATION = Number(process.env.GENESIS_CUE_POPULATION ?? 48);
 const EPISODES = Number(process.env.GENESIS_CUE_EPISODES ?? 24);
 const DELAY = Number(process.env.GENESIS_CUE_DELAY ?? 3);
+const DELAY_MIN = Number(process.env.GENESIS_CUE_DELAY_MIN ?? DELAY);
+const DELAY_MAX = Number(process.env.GENESIS_CUE_DELAY_MAX ?? DELAY);
 
 function rng(seed) {
   let state = seed >>> 0;
@@ -40,7 +42,7 @@ function episode(controller, cue, mapping, delay, random, memoryEnabled = true) 
   const activity = [];
   for (let tick = 0; tick < delay + 5; tick += 1) {
     const input = tick === 0 ? cue : 0;
-    if (memoryEnabled) trace = clamp(controller.leak * trace + controller.input * input, -2, 2);
+    if (memoryEnabled) trace = clamp((controller.leak + controller.recurrent) * trace + controller.input * input, -2, 2);
     else trace = 0;
     const output = sigmoid(controller.output * trace + controller.bias);
     energy -= 0.015 * Math.abs(trace) + 0.01 * output;
@@ -57,14 +59,16 @@ function score(controller, seed, memoryEnabled = true, episodes = EPISODES) {
   const mapping = [0, 1];
   let correct = 0;
   let energy = 0;
+  const samples = [];
   for (let index = 0; index < episodes; index += 1) {
     const cue = index % 2;
-    const episodeDelay = 2 + Math.floor(random() * 3);
+    const episodeDelay = DELAY_MIN + Math.floor(random() * (DELAY_MAX - DELAY_MIN + 1));
     const result = episode(controller, cue, mapping, episodeDelay, random, memoryEnabled);
     correct += result.correct ? 1 : 0;
     energy += result.energy;
+    if (samples.length < 4) samples.push({ cue, delay: episodeDelay, response: result.response, trace: Number(result.trace.toFixed(3)), correct: result.correct, energy: Number(result.energy.toFixed(3)) });
   }
-  return { accuracy: correct / episodes, energy: energy / episodes };
+  return { accuracy: correct / episodes, energy: energy / episodes, samples };
 }
 
 function run(seed) {
@@ -82,10 +86,11 @@ function run(seed) {
     .sort((a, b) => b.accuracy - a.accuracy || b.energy - a.energy)[0];
   const founderResult = score(founder, seed + 99991);
   const memoryOff = score(best.controller, seed + 99991, false);
-  return { seed, delay: DELAY, generations: GENERATIONS, founder: founderResult, evolved: { accuracy: best.accuracy, energy: best.energy }, memoryDisabled: memoryOff, parameters: best.controller };
+  const topologyPerturbed = score({ ...best.controller, recurrent: 0 }, seed + 99991, true);
+  return { seed, delayRange: [DELAY_MIN, DELAY_MAX], generations: GENERATIONS, founder: founderResult, evolved: { accuracy: best.accuracy, energy: best.energy }, memoryDisabled: memoryOff, topologyPerturbed, parameters: best.controller };
 }
 
 console.log(JSON.stringify({
-  protocol: { task: "binary cue → blank delay → binary response", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodesPerScore: EPISODES, delayRange: [2, 4], episodesUseConfiguredDelay: DELAY, controls: ["founder", "evolved", "memory-disabled"] },
+  protocol: { task: "binary cue → blank delay → binary response", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodesPerScore: EPISODES, delayRange: [DELAY_MIN, DELAY_MAX], controls: ["founder", "evolved", "memory-disabled", "topology-perturbed"] },
   runs: SEEDS.map(run)
 }, null, 2));
