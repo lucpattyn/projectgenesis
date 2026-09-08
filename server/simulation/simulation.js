@@ -4234,6 +4234,10 @@ export class Simulation {
     this.environmentMemoryVisualizationEnabled = Boolean(enabled);
   }
 
+  setCollectiveMemoryEnabled(enabled) {
+    this.config.bond.collectiveMemory.enabled = Boolean(enabled);
+  }
+
   setCourierEnabled(enabled) {
     this.config.courier.enabled = Boolean(enabled);
     if (!this.config.courier.enabled) {

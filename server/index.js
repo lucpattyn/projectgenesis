@@ -179,6 +179,10 @@ async function handleApi(request, response, url) {
       simulation.setEnvironmentMemoryVisualizationEnabled(body.environmentMemoryVisualizationEnabled);
     }
 
+    if (body.collectiveMemoryEnabled !== undefined) {
+      simulation.setCollectiveMemoryEnabled(body.collectiveMemoryEnabled);
+    }
+
     if (body.courierEnabled !== undefined) {
       simulation.setCourierEnabled(body.courierEnabled);
     }
