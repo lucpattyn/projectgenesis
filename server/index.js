@@ -47,8 +47,9 @@ function configureVisualRelayDemo() {
   simulation.bonds.set(simulation.bondKey(sender.id, relay.id), bond(sender.id, relay.id));
   simulation.bonds.set(simulation.bondKey(relay.id, receiver.id), bond(relay.id, receiver.id));
   simulation.world.addSignal(sender.x, sender.y, 255, 255);
-  // Keep the diagnostic scene paused so the relay topology is inspectable;
-  // normal mode continues to run exactly as before.
+  // Keep the diagnostic scene paused so the relay topology is inspectable, but
+  // leave its timer allocated so the normal Resume control can play it.
+  simulation.start();
   simulation.pause();
 }
 
