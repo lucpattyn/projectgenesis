@@ -135,3 +135,16 @@ Across seeds `160120–160123`, evolved groups achieved **100%, 50%, 50%, and
 multi-hop memory path but does not yet discriminate bond-retention policies.
 The next experiment should lengthen the episode or lower initial reserves so
 bond loss becomes observable without changing the production ecology.
+
+## Bond-retention stress test
+
+The stress run used 12 candidates, 16 generations, eight episodes, an initial
+reserve of `0.30`, reserve decay `0.012/tick`, and 40 post-cue hold ticks. The
+pulse-enabled result was compared with pulse disabled and communication
+disabled controls. Seed `160120` retained one of its two bonds on average and
+reached 100% accuracy with pulses; its pulse-disabled and communication-off
+controls lost both bonds and reached 50%. Seeds `160121–160123` lost both bonds
+even with pulses and stayed at chance. Thus the pulse can protect a useful
+path, but its current gain is too weak or too late for reliable group survival.
+This is a useful failure mode: the next change should improve reserve timing or
+pulse budgeting, not alter the memory topology.
