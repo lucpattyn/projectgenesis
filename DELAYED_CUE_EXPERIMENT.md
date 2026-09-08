@@ -49,6 +49,16 @@ response for replay inspection. This validates substrate wiring, not evolved
 communication; the next experiment must evolve sender and receiver organization
 under this real-bond task.
 
+## Real-bond evolutionary pilot
+
+`scripts/run-evolving-bonded-delayed-cue.mjs` evolves four bounded edge weights
+while evaluating through the production executor and real bond state. With 24
+paired candidates, 40 generations, and 12 episodes at a four-tick delay, one of
+three seeds reached 100% accuracy; the other two remained at 50%. In every run
+the communication-disabled control was 50%, and an ideal-weight sanity control
+was 100%. This is a useful but mixed result: the substrate is capable, while
+the current mutation/search budget is not yet reliably reaching the solution.
+
 ## Interpretation
 
 Useful memory requires above-chance delayed accuracy on unseen cue sequences and

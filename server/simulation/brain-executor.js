@@ -22,7 +22,7 @@ export class BrainExecutor {
     const incoming = new Map(brain.nodes.map((node) => [node.id, []]));
 
     for (const connection of brain.edges) {
-      incoming.get(connection.to)?.push(connection.from);
+      incoming.get(connection.to)?.push({ source: connection.from, weight: Number(connection.weight ?? 1) });
     }
 
     for (const brainNode of brain.nodes) {
@@ -41,7 +41,7 @@ export class BrainExecutor {
         }
 
         const sources = incoming.get(brainNode.id) ?? [];
-        const total = sources.reduce((sum, source) => sum + (values.get(source) ?? 0), 0);
+        const total = sources.reduce((sum, link) => sum + (values.get(link.source) ?? 0) * link.weight, 0);
         values.set(brainNode.id, sources.length ? total / sources.length : 0);
       }
     }
@@ -54,7 +54,7 @@ export class BrainExecutor {
         .filter((brainNode) => brainNode.kind === "persistent")
         .map((brainNode) => {
           const sources = incoming.get(brainNode.id) ?? [];
-          const total = sources.reduce((sum, source) => sum + (values.get(source) ?? 0), 0);
+          const total = sources.reduce((sum, link) => sum + (values.get(link.source) ?? 0) * link.weight, 0);
           return [brainNode.id, Number((sources.length ? total / sources.length : 0).toFixed(2))];
         })
     );
