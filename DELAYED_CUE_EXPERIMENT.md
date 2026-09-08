@@ -78,6 +78,17 @@ heritable recurrent self-connection carries state instead. Training reached
 promising evidence on one seed, but not yet robust generalization; longer-delay
 memory remains the current bottleneck.
 
+## Curriculum replication
+
+The preregistered curriculum run used fresh seeds `160112–160119`: training
+delays progressed through 4, 8, and 16 ticks, followed by 24 balanced unseen
+episodes at randomized 8–16 tick delays. The bounded pilot used 12 candidates,
+20 generations, and 8 episodes per generation. One seed (`160114`) reached
+100% unseen accuracy with communication disabled at 50%; the other seven stayed
+at 50%. This confirms reachability but rejects the claim of robust evolution.
+The next bottleneck is mutation/search stability and recurrent-state retention,
+not the bond transport path itself.
+
 ## Interpretation
 
 Useful memory requires above-chance delayed accuracy on unseen cue sequences and

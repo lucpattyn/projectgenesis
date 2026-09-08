@@ -1,15 +1,21 @@
 // Evolves edge weights while executing through real Genesis organisms and a real bond.
 import { Simulation } from "../server/simulation/simulation.js";
 
-const SEEDS = [160109, 160110, 160111];
-const POPULATION = Number(process.env.GENESIS_BOND_CUE_POPULATION ?? 24);
-const GENERATIONS = Number(process.env.GENESIS_BOND_CUE_GENERATIONS ?? 40);
-const EPISODES = Number(process.env.GENESIS_BOND_CUE_EPISODES ?? 12);
-const EVAL_EPISODES = Number(process.env.GENESIS_BOND_CUE_EVAL_EPISODES ?? 32);
+const SEEDS = [160112, 160113, 160114, 160115, 160116, 160117, 160118, 160119];
+const POPULATION = Number(process.env.GENESIS_BOND_CUE_POPULATION ?? 16);
+const GENERATIONS = Number(process.env.GENESIS_BOND_CUE_GENERATIONS ?? 30);
+const EPISODES = Number(process.env.GENESIS_BOND_CUE_EPISODES ?? 8);
+const EVAL_EPISODES = Number(process.env.GENESIS_BOND_CUE_EVAL_EPISODES ?? 24);
 const TRAIN_DELAY_MIN = 4;
 const TRAIN_DELAY_MAX = 4;
 const EVAL_DELAY_MIN = 8;
 const EVAL_DELAY_MAX = 16;
+
+function curriculumDelay(generation) {
+  const phase = Math.min(2, Math.floor(generation / Math.max(1, GENERATIONS / 3)));
+  const delay = [4, 8, 16][phase];
+  return [delay, delay];
+}
 
 function brain(role, parameters) {
   const sender = role === "sender";
@@ -101,7 +107,8 @@ function run(seed) {
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   let population = Array.from({ length: POPULATION }, () => randomParameters(random));
   for (let generation = 0; generation < GENERATIONS; generation += 1) {
-    const ranked = population.map((parameters) => ({ parameters, score: score(parameters, seed + generation * 17) })).sort((a, b) => b.score - a.score);
+    const [trainMin, trainMax] = curriculumDelay(generation);
+    const ranked = population.map((parameters) => ({ parameters, score: score(parameters, seed + generation * 17, true, EPISODES, trainMin, trainMax) })).sort((a, b) => b.score - a.score);
     const survivors = ranked.slice(0, 5).map((entry) => entry.parameters);
     population = survivors.map((parent) => ({ ...parent }));
     while (population.length < POPULATION) {
@@ -109,11 +116,11 @@ function run(seed) {
       else population.push(crossover(survivors[Math.floor(random() * survivors.length)], survivors[Math.floor(random() * survivors.length)], random));
     }
   }
-  const best = population.map((parameters) => ({ parameters, score: score(parameters, seed + 99991) })).sort((a, b) => b.score - a.score)[0];
+  const best = population.map((parameters) => ({ parameters, score: score(parameters, seed + 99991, true, EPISODES, 16, 16) })).sort((a, b) => b.score - a.score)[0];
   const ideal = { senderInput: 1, senderOutput: 1, senderMemory: 1, receiverInput: 1, receiverOutput: 1, receiverMemory: 1 };
   return {
     seed,
-    training: best.score,
+    finalTraining: best.score,
     unseenLongDelay: score(best.parameters, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
     unseenCommunicationDisabled: score(best.parameters, seed + 99991, false, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
     idealUnseen: score(ideal, seed + 99991, true, EVAL_EPISODES, EVAL_DELAY_MIN, EVAL_DELAY_MAX, true),
@@ -121,4 +128,4 @@ function run(seed) {
   };
 }
 
-console.log(JSON.stringify({ protocol: { task: "real bond sender cue → Prime-13 → Prime-31 → receiver response", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, trainingEpisodes: EPISODES, trainingDelay: [TRAIN_DELAY_MIN, TRAIN_DELAY_MAX], evaluationEpisodes: EVAL_EPISODES, evaluationDelay: [EVAL_DELAY_MIN, EVAL_DELAY_MAX], evaluationCueOrder: "unseen randomized", mutation: "bounded edge weights with sign flips and crossover" }, runs: SEEDS.map(run) }, null, 2));
+console.log(JSON.stringify({ protocol: { task: "real bond sender cue → Prime-13 → Prime-31 → receiver response", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, trainingEpisodes: EPISODES, trainingCurriculum: [4, 8, 16], evaluationEpisodes: EVAL_EPISODES, evaluationDelay: [EVAL_DELAY_MIN, EVAL_DELAY_MAX], evaluationCueOrder: "unseen randomized", mutation: "bounded edge weights with sign flips and crossover" }, runs: SEEDS.map(run) }, null, 2));
