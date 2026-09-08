@@ -90,7 +90,66 @@ function run(seed) {
   return { seed, delayRange: [DELAY_MIN, DELAY_MAX], generations: GENERATIONS, founder: founderResult, evolved: { accuracy: best.accuracy, energy: best.energy }, memoryDisabled: memoryOff, topologyPerturbed, parameters: best.controller };
 }
 
+function randomCollective(random) {
+  return { sender: randomController(random), receiver: randomController(random), communication: (random() - 0.5) * 2 };
+}
+
+function mutateCollective(parent, random) {
+  const child = { sender: { ...parent.sender }, receiver: { ...parent.receiver }, communication: parent.communication };
+  const targets = ["sender", "receiver", "communication"];
+  const target = targets[Math.floor(random() * targets.length)];
+  if (target === "communication") child.communication += (random() - 0.5) * 0.8;
+  else {
+    const keys = Object.keys(child[target]);
+    const key = keys[Math.floor(random() * keys.length)];
+    child[target][key] += (random() - 0.5) * (key === "leak" ? 0.18 : 0.8);
+    child[target].leak = clamp(child[target].leak, 0.35, 0.98);
+  }
+  child.communication = clamp(child.communication, -2, 2);
+  return child;
+}
+
+function collectiveScore(controller, seed, communicationEnabled = true, episodes = EPISODES) {
+  const random = rng(seed);
+  let correct = 0;
+  let energy = 0;
+  for (let index = 0; index < episodes; index += 1) {
+    const cue = index % 2;
+    const delay = DELAY_MIN + Math.floor(random() * (DELAY_MAX - DELAY_MIN + 1));
+    let senderTrace = 0;
+    let receiverTrace = 0;
+    for (let tick = 0; tick < delay + 5; tick += 1) {
+      const input = tick === 0 ? cue : 0;
+      senderTrace = clamp((controller.sender.leak + controller.sender.recurrent) * senderTrace + controller.sender.input * input, -2, 2);
+      const signal = communicationEnabled ? (sigmoid(controller.sender.output * senderTrace + controller.sender.bias) * 2 - 1) : 0;
+      receiverTrace = clamp((controller.receiver.leak + controller.receiver.recurrent) * receiverTrace + controller.communication * signal, -2, 2);
+      energy -= 0.012 * (Math.abs(senderTrace) + Math.abs(receiverTrace)) + 0.008 * Math.abs(signal);
+    }
+    const response = sigmoid(controller.receiver.output * receiverTrace + controller.receiver.bias) >= 0.5 ? 1 : 0;
+    const isCorrect = response === cue;
+    correct += isCorrect ? 1 : 0;
+    energy += isCorrect ? 1 : -0.6;
+  }
+  return { accuracy: correct / episodes, energy: energy / episodes };
+}
+
+function runCollective(seed) {
+  const random = rng(seed ^ 0x51a7);
+  let population = Array.from({ length: POPULATION }, () => randomCollective(random));
+  for (let generation = 0; generation < GENERATIONS; generation += 1) {
+    const ranked = population.map((controller) => ({ controller, ...collectiveScore(controller, seed + generation * 37) }))
+      .sort((a, b) => (b.accuracy + b.energy * 0.02) - (a.accuracy + a.energy * 0.02));
+    const survivors = ranked.slice(0, Math.max(2, Math.floor(POPULATION * 0.2))).map((entry) => entry.controller);
+    population = survivors.map((parent) => ({ sender: { ...parent.sender }, receiver: { ...parent.receiver }, communication: parent.communication }));
+    while (population.length < POPULATION) population.push(mutateCollective(survivors[Math.floor(random() * survivors.length)], random));
+  }
+  const best = population.map((controller) => ({ controller, ...collectiveScore(controller, seed + 99991) }))
+    .sort((a, b) => b.accuracy - a.accuracy || b.energy - a.energy)[0];
+  return { seed, founder: collectiveScore(randomCollective(rng(seed ^ 0x9e37)), seed + 99991), evolved: { accuracy: best.accuracy, energy: best.energy }, communicationDisabled: collectiveScore(best.controller, seed + 99991, false), parameters: best.controller };
+}
+
 console.log(JSON.stringify({
   protocol: { task: "binary cue → blank delay → binary response", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodesPerScore: EPISODES, delayRange: [DELAY_MIN, DELAY_MAX], controls: ["founder", "evolved", "memory-disabled", "topology-perturbed"] },
-  runs: SEEDS.map(run)
+  runs: SEEDS.map(run),
+  senderReceiver: { task: "sender sees cue → scalar bond message → receiver responds", controls: ["founder", "evolved", "communication-disabled"], runs: SEEDS.map(runCollective) }
 }, null, 2));
