@@ -59,6 +59,13 @@ the communication-disabled control was 50%, and an ideal-weight sanity control
 was 100%. This is a useful but mixed result: the substrate is capable, while
 the current mutation/search budget is not yet reliably reaching the solution.
 
+The follow-up pilot added 25% sign-flip mutation and crossover, then used fresh
+seeds `160106–160108` with a smaller bounded budget (12 candidates, 20
+generations, 8 episodes). All three reached 100% while communication-disabled
+controls remained at 50%. This improves reachability, but it is still a small
+search screen; larger independent runs are required before treating it as an
+evolutionary result.
+
 ## Interpretation
 
 Useful memory requires above-chance delayed accuracy on unseen cue sequences and

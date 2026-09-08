@@ -1,7 +1,7 @@
 // Evolves edge weights while executing through real Genesis organisms and a real bond.
 import { Simulation } from "../server/simulation/simulation.js";
 
-const SEEDS = [160103, 160104, 160105];
+const SEEDS = [160106, 160107, 160108];
 const POPULATION = Number(process.env.GENESIS_BOND_CUE_POPULATION ?? 12);
 const GENERATIONS = Number(process.env.GENESIS_BOND_CUE_GENERATIONS ?? 20);
 const EPISODES = Number(process.env.GENESIS_BOND_CUE_EPISODES ?? 8);
@@ -32,8 +32,15 @@ function randomParameters(random) {
 function mutate(parent, random) {
   const child = { ...parent };
   const key = Object.keys(child)[Math.floor(random() * 4)];
-  child[key] = Math.max(-2, Math.min(2, child[key] + (random() - 0.5) * 0.9));
+  if (random() < 0.25) child[key] = -child[key];
+  else child[key] = Math.max(-2, Math.min(2, child[key] + (random() - 0.5) * 0.9));
   return child;
+}
+
+function crossover(first, second, random) {
+  const child = {};
+  for (const key of Object.keys(first)) child[key] = random() < 0.5 ? first[key] : second[key];
+  return mutate(child, random);
 }
 
 function pair(seed, parameters) {
@@ -80,7 +87,10 @@ function run(seed) {
     const ranked = population.map((parameters) => ({ parameters, score: score(parameters, seed + generation * 17) })).sort((a, b) => b.score - a.score);
     const survivors = ranked.slice(0, 5).map((entry) => entry.parameters);
     population = survivors.map((parent) => ({ ...parent }));
-    while (population.length < POPULATION) population.push(mutate(survivors[Math.floor(random() * survivors.length)], random));
+    while (population.length < POPULATION) {
+      if (random() < 0.5) population.push(mutate(survivors[Math.floor(random() * survivors.length)], random));
+      else population.push(crossover(survivors[Math.floor(random() * survivors.length)], survivors[Math.floor(random() * survivors.length)], random));
+    }
   }
   const best = population.map((parameters) => ({ parameters, score: score(parameters, seed + 99991) })).sort((a, b) => b.score - a.score)[0];
   const ideal = { senderInput: 1, senderOutput: 1, receiverInput: 1, receiverOutput: 1 };
