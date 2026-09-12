@@ -268,3 +268,26 @@ communication, but it is not yet a full survival experiment. The next code
 step must add an explicit finite-energy death/resource boundary and then test
 whether task-linked resource income can sustain the group without silently
 refilling reserves.
+
+## Evolved maintenance-allocation pass (2026-09-13)
+
+`scripts/run-evolving-maintenance-allocation.mjs` added an explicit
+`energy <= 0` death boundary, removed bonds attached to dead members, and
+evolved bounded member-versus-bond reward shares. Eight fresh seeds
+(`160136–160143`) used 20 generations, 16 episodes, initial member energy 42,
+initial bond reserve 4, and an 8-unit reward paid only after a correct response.
+Fitness was accuracy plus a small survival term (`accuracy + 0.1 × survival`).
+
+The run exposed a real bottleneck: evolved groups survived only 12.5–18.8% of
+episodes and averaged 1.62–1.75 lost bonds. Resource-enabled accuracy exceeded
+the resource-disabled control on only one seed (`160137`: 66.7% vs 50.0%);
+several seeds showed identical accuracy because the group died before it could
+earn a reward. This is not yet a successful maintenance policy, but it confirms
+the accounting boundary and shows why reward timing matters: rewards arriving
+only after a fully valid response cannot rescue a group that cannot reach the
+first response.
+
+The next implementation should provide a declared, bounded work advance (not
+free energy) or lower initial operating cost enough to reach the first
+task-linked reward, then compare allocation policies under the same finite
+budget. Do not promote this mechanism to live defaults yet.
