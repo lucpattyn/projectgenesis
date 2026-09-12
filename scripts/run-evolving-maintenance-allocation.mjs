@@ -53,7 +53,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   const { simulation, sender, relay, receiver } = makeGroup(seed);
-  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let firstDeathAudit = null; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let pendingPerceptionNeed = 0; let lastRelayState = 0; let lastReceiverState = 0;
+  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let firstDeathAudit = null; let earlyLedger = []; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let pendingPerceptionNeed = 0; let lastRelayState = 0; let lastReceiverState = 0;
   for (let episode = 0; episode < EPISODES; episode += 1) {
     const cue = episode % 2; const delay = 4 + Math.floor(random() * 9);
     simulation.world.signalField = Array.from({ length: simulation.world.height }, () => Array(simulation.world.width).fill(0));
@@ -110,6 +110,11 @@ function evaluate(parameters, seed, resourceEnabled = true) {
       pendingPerceptionNeed = [senderResult, relayResult, receiverResult]
         .map((result) => result?.energyFlow?.expenses?.perception ?? 0)
         .reduce((sum, value) => sum + value, 0);
+      if (episode < 3) earlyLedger.push({ episode, tick, pool, bonds: simulation.bonds.size, members: [
+        { role: "sender", energy: sender.energy, costs: senderResult?.energyFlow?.expenses ?? {} },
+        { role: "relay", energy: relay.energy, costs: relayResult?.energyFlow?.expenses ?? {} },
+        { role: "receiver", energy: receiver.energy, costs: receiverResult?.energyFlow?.expenses ?? {} }
+      ] });
       lastRelayState = relayState; lastReceiverState = receiverState;
       if (tick === 0) simulation.world.signalField = Array.from({ length: simulation.world.height }, () => Array(simulation.world.width).fill(0));
       simulation.world.decaySignals(simulation.config.signal.decay);
@@ -122,7 +127,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
   }
   const accuracy = attempted ? correct / attempted : 0;
   const survival = attempted / EPISODES;
-  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, advancePaid, workBudgetPaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, firstDeathAudit, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, workBudgetIn: workBudgetPaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 };
+  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, advancePaid, workBudgetPaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, firstDeathAudit, earlyLedger, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, workBudgetIn: workBudgetPaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 };
 }
 
 function run(seed) {

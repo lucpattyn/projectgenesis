@@ -435,6 +435,27 @@ confirms that perception alone is not the missing resource; the next step is to
 instrument the complete per-tick ledger over the first three episodes and
 identify the earliest irreversible loss before changing allocation again.
 
+## Complete early-episode ledger (2026-09-13)
+
+The first three episodes were traced per tick at the best configuration. Before
+the first death (episode 3, tick 42), each member accumulated approximately:
+
+| Cost | Per member over early trace |
+|---|---:|
+| Movement | **35.0** |
+| Perception | 4.2 |
+| Maintenance | 1.4 |
+| Bond coupling | 1.75 |
+| Signaling | <0.02 |
+
+The decisive finding is movement: `1.0/tick` dominates all processing costs,
+even though the isolated task intends a stationary bonded group. The prior
+escrow experiments correctly excluded movement, but that means they were
+funding the wrong category. The next targeted fix is to set movement to zero
+for the stationary communication task (or explicitly charge only when a
+movement action is requested), then rerun the same finite-budget controls. This
+is a task-scoped accounting correction, not a live ecology default change.
+
 ## Per-member first-death audit (2026-09-13)
 
 The strongest configuration was rerun with first-death snapshots capturing the
