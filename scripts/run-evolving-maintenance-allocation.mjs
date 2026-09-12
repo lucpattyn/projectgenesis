@@ -36,6 +36,9 @@ function mutate(parent, random) {
 
 function makeGroup(seed) {
   const simulation = new Simulation(); simulation.stop(); simulation.setSeed(seed); simulation.stop();
+  // This benchmark holds members in place; movement is charged only in tasks
+  // that request movement. Live ecology keeps its normal movement cost.
+  simulation.config.organism.moveCost = 0;
   simulation.config.organism.couplingMaintenance *= OPERATING_COST_SCALE;
   simulation.config.organism.persistenceMaintenance *= OPERATING_COST_SCALE;
   simulation.config.signal.emissionCost *= OPERATING_COST_SCALE;

@@ -456,6 +456,30 @@ for the stationary communication task (or explicitly charge only when a
 movement action is requested), then rerun the same finite-budget controls. This
 is a task-scoped accounting correction, not a live ecology default change.
 
+## Stationary-task movement correction (2026-09-13)
+
+The isolated benchmark now sets movement cost to zero because the task holds
+all members stationary; movement remains charged in the live ecology and in
+any task that requests it. The full best configuration was rerun across all
+eight seeds.
+
+Results:
+
+- Resource-on accuracy: **88.3%**
+- Resource-on survival: **100% of episodes**
+- Bond loss: **0.00**
+- Resource-off accuracy: **88.3%**
+- Resource-off survival: **100%**
+- Task rewards paid: 113 units/run on average
+
+Removing the artificial movement drain completely eliminates early deaths and
+bond loss. This is a major survival improvement, but the equal resource-on and
+resource-off accuracy shows that the current receiver behavior still needs a
+stronger communication-specific control. The next step is to rerun with link
+removal and shuffled-neighbor controls under this corrected energy accounting,
+then only promote a policy if accuracy drops causally when communication is
+removed.
+
 ## Per-member first-death audit (2026-09-13)
 
 The strongest configuration was rerun with first-death snapshots capturing the
