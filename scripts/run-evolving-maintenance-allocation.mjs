@@ -53,7 +53,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   const { simulation, sender, relay, receiver } = makeGroup(seed);
-  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let pendingProcessingNeed = 0; let lastRelayState = 0; let lastReceiverState = 0;
+  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let firstDeathAudit = null; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let pendingProcessingNeed = 0; let lastRelayState = 0; let lastReceiverState = 0;
   for (let episode = 0; episode < EPISODES; episode += 1) {
     const cue = episode % 2; const delay = 4 + Math.floor(random() * 9);
     simulation.world.signalField = Array.from({ length: simulation.world.height }, () => Array(simulation.world.width).fill(0));
@@ -83,7 +83,17 @@ function evaluate(parameters, seed, resourceEnabled = true) {
       // Explicit finite-energy boundary: zero energy ends the member before
       // another episode can silently continue it.
       for (const member of [sender, relay, receiver]) if (member.energy <= 0) { member.energy = 0; member.alive = false; member.deathReason = "finite-energy-budget"; }
-      if (firstDeathEpisode === null && ![sender, relay, receiver].every((member) => member.alive)) firstDeathEpisode = episode;
+      if (firstDeathEpisode === null && ![sender, relay, receiver].every((member) => member.alive)) {
+        firstDeathEpisode = episode;
+        firstDeathAudit = {
+          episode, tick: elapsedTicks,
+          members: [
+            { role: "sender", id: sender.id, alive: sender.alive, energy: sender.energy, deathReason: sender.deathReason ?? null, costs: senderResult?.energyFlow?.expenses ?? {} },
+            { role: "relay", id: relay.id, alive: relay.alive, energy: relay.energy, deathReason: relay.deathReason ?? null, costs: relayResult?.energyFlow?.expenses ?? {} },
+            { role: "receiver", id: receiver.id, alive: receiver.alive, energy: receiver.energy, deathReason: receiver.deathReason ?? null, costs: receiverResult?.energyFlow?.expenses ?? {} }
+          ]
+        };
+      }
       for (const [key, bond] of simulation.bonds) {
         const first = simulation.organisms.find((member) => member.id === bond.firstId);
         const second = simulation.organisms.find((member) => member.id === bond.secondId);
@@ -113,7 +123,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
   }
   const accuracy = attempted ? correct / attempted : 0;
   const survival = attempted / EPISODES;
-  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, advancePaid, workBudgetPaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, workBudgetIn: workBudgetPaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 };
+  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, advancePaid, workBudgetPaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, firstDeathAudit, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, workBudgetIn: workBudgetPaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 };
 }
 
 function run(seed) {

@@ -421,6 +421,24 @@ is earlier member energy drain, not only post-delivery funding. The next step is
 to audit per-tick energy costs and make only necessary processing cost eligible
 for escrow, retaining the same causal controls.
 
+## Per-member first-death audit (2026-09-13)
+
+The strongest configuration was rerun with first-death snapshots capturing the
+actual `Organism.act` expense categories. At the first failure, sender, relay,
+and receiver all had zero energy and the same per-tick costs:
+
+| Member | Maintenance | Perception | Bond coupling | Signaling |
+|---|---:|---:|---:|---:|
+| Sender | 0.040 | **0.120** | 0.050 | 0.000 |
+| Relay | 0.040 | **0.120** | 0.050 | 0.000 |
+| Receiver | 0.040 | **0.120** | 0.050 | 0.000 |
+
+The dominant recurring cost is perception (`0.12/tick`), followed by bond
+coupling (`0.05/tick`); signaling was zero in the captured death tick. This
+identifies the next targeted intervention: make only perception needed for the
+declared cue task escrow-eligible (or reduce its isolated cost), while keeping
+bond costs explicit. Do not broadly lower all costs or add a survival reward.
+
 ## Expense-matched processing escrow (2026-09-13)
 
 The progress-gated escrow was tightened further: each credit is now capped by
