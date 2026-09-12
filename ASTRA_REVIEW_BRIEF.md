@@ -407,3 +407,16 @@ communication. This is a positive survival signal, but not sufficient to
 promote the mechanism. The next step is to make the work budget conditional on
 measurable processing progress (state transition or relay delivery), preventing
 durability-only strategies from consuming the task pool.
+
+## Delivery-gated processing window (2026-09-13)
+
+The work budget now exposes a progress threshold (`0.05`) and a two-tick
+window unlocked only after a measurable receiver-state change following relay
+delivery. The strongest configuration was rerun at the full budget.
+Resource-enabled accuracy was 81.2%, survival 21.9%, and bond loss 1.56; the
+resource-disabled control was 85.4% accuracy and 18.0% survival. Progress-linked
+work increased to 4.75 units, but first deaths still occurred at episodes 3–4.
+The added window did not improve task accuracy, indicating that the bottleneck
+is earlier member energy drain, not only post-delivery funding. The next step is
+to audit per-tick energy costs and make only necessary processing cost eligible
+for escrow, retaining the same causal controls.
