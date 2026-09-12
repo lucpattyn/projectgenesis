@@ -366,6 +366,24 @@ budget tied to processing cost (still deducted from the task pool), then test
 whether successful communication—not mere longevity—improves before topology
 evolution.
 
+## Progress-gated work budget (2026-09-13)
+
+The pre-response budget is now released after the startup advance only when the
+relay or receiver persistent state changes by at least `0.05`; the credit is
+held until the following tick and remains debited from the finite task pool.
+This blocks a motionless but durable group from receiving unlimited operating
+support.
+
+At the strongest prior configuration (advance `3.0`, cost scale `0.5`, full
+16×20×16 budget, eight seeds), the progress-gated run reached 81.2% mean
+accuracy, 21.9% survival, and 1.56 mean bond losses. The resource-disabled
+control reached 85.4% accuracy and 18.0% survival. The gated budget paid 13.5
+startup units and only 3.69 progress-linked work units on average; first deaths
+returned to episodes 3–4. This is a principled constraint, but it currently
+starves the group before useful communication can consolidate. The next step
+should tune the progress threshold and grant a small bounded processing window
+after verified relay delivery, while keeping the same ledger and controls.
+
 ## Pre-response processing budget (2026-09-13)
 
 The isolated maintenance study now includes a capped `0.5`-unit per-tick
