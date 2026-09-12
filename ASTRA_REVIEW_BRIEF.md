@@ -15,6 +15,9 @@ shape-specific scripting.
 - Regression test: `npm test` passes (`Spatial bond regression checks passed`)
 - The live ecology defaults have not been changed by the delayed-cue work.
 - All new work is isolated in headless experiment scripts and documentation.
+- Seed-count correction: the larger validation is exactly eight seeds,
+  `160112–160119`; there is no ninth seed in that result set. Earlier three-
+  seed and four-seed screens are separate experiments.
 
 Recent commits:
 
@@ -200,3 +203,44 @@ correct receiver response, and both bond lifetime and accuracy are scored.
 Include first-link/second-link break controls and at least eight independent
 seeds before changing any live default.
 
+## Fixed three-member causal-control run (2026-09-13)
+
+The first sequential milestone was implemented as
+`scripts/run-group-fixed-controls.mjs` and run with its default eight seeds
+(`160120–160127`), 16 balanced episodes per seed, randomized one-tick cue
+delivery, and delays uniformly sampled from 4–12 ticks. Each group used two
+real bonds with an adequate diagnostic reserve of `10`; members started at
+energy `150`. The cue field was explicitly erased after tick 0 so later
+responses could only use retained member state and bonded transport.
+
+Command:
+
+```text
+node scripts/run-group-fixed-controls.mjs
+```
+
+Mean accuracy across the eight seeds:
+
+| Condition | Mean accuracy | Per-seed result |
+|---|---:|---|
+| Fixed communication | 78.1% | 68.8, 68.8, 75.0, 75.0, 81.3, 81.3, 87.5, 87.5% |
+| Communication disabled | 50.0% | 50% on all seeds |
+| First link removed | 50.0% | 50% on all seeds |
+| Second link removed | 50.0% | 50% on all seeds |
+| Sender recurrence disabled | 50.0% | 50% on all seeds |
+| Relay recurrence disabled | 78.1% | same as fixed condition |
+| Receiver recurrence disabled | 78.1% | same as fixed condition |
+| All recurrence disabled | 52.3% | 50.0–56.3% |
+
+This run corrected the previous environmental-cue leakage. It shows above-
+chance multi-hop communication, causal dependence on the first link and the
+sender's retained state, and no dependence on a recurrent relay/receiver in
+this particular executor. That last result is informative: the relay can
+transmit a still-present sender state without itself needing recurrence. It
+also means this benchmark does not yet prove that every member stores memory.
+No raw JSON file was retained; the table is reproducible from the command and
+the script's per-episode traces.
+
+The next evidence-supported action is sustained repeated cues under a finite
+energy budget, with a resource-disabled control. Do not yet evolve topology or
+change live defaults.
