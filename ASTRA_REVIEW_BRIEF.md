@@ -291,3 +291,26 @@ The next implementation should provide a declared, bounded work advance (not
 free energy) or lower initial operating cost enough to reach the first
 task-linked reward, then compare allocation policies under the same finite
 budget. Do not promote this mechanism to live defaults yet.
+
+## Bounded work-advance pass (2026-09-13)
+
+The maintenance study was extended with a declared task escrow: a `1.5`-unit
+startup advance is released only to an intact group at episode start, and an
+`8`-unit reward is released only after a correct response. Both are deducted
+from a finite pool (`EPISODES × 9.5`); no bond or member store is refilled from
+outside that ledger. The same eight seeds and search budget were rerun.
+
+The advance produced a measurable but limited improvement. On seeds `160136`
+and `160137`, resource-enabled accuracy/survival improved from the
+resource-disabled baseline (66.7% vs 50.0% accuracy; 18.8% vs 12.5% survival).
+The remaining seeds were unchanged or already at 100% accuracy despite only
+18.8% survival. Each run paid six startup advances before the group became
+unable to continue, and bond loss remained about 1.62 per run. The mechanism
+therefore confirms that timing—not merely reward size—matters, but the current
+advance is insufficient to bridge the full operating horizon.
+
+Next action: tune only the declared escrow and operating-cost parameters in a
+matched sweep, recording pool depletion and first-death tick. Do not add a
+larger survival reward or alter live defaults until a finite-budget group can
+complete most episodes with communication-disabled performance remaining at
+chance.
