@@ -443,6 +443,23 @@ is earlier member energy drain, not only post-delivery funding. The next step is
 to audit per-tick energy costs and make only necessary processing cost eligible
 for escrow, retaining the same causal controls.
 
+## Per-neighbor channels and evolved connectivity (2026-09-13)
+
+The maintenance experiment now supports explicit relay-specific channels: the
+relay reads the sender neighbor and the receiver reads the relay neighbor,
+instead of relying on an undifferentiated neighbor mean. Connectivity is a
+heritable two-bit mask; mutation may remove or restore either physical link,
+and fitness includes a small per-link maintenance cost.
+
+An exploratory eight-seed run (12 candidates, 12 generations, 12 episodes)
+selected the complete two-link mask (`3`) in all eight seeds. Both-link
+communication reached 79.2% mean accuracy with 100% survival; removing either
+link returned accuracy to 50%. Shuffling neighbor identities was 86.5% in this
+chain, because the explicit channel mapping supplies the same value under a
+single intended neighbor. This validates heritable connectivity selection in
+the small arena, but not recovery after damage; the next step is to allow a
+replacement link and measure recovery time and cost after random failure.
+
 ## Cue-relevant perception escrow (2026-09-13)
 
 Escrow eligibility was narrowed to the measured `perception` expense returned

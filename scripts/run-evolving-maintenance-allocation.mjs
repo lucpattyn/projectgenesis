@@ -24,17 +24,18 @@ function brain(role) {
 function randomParams(random) {
   const memberShare = 0.2 + random() * 0.7;
   const bondShare = 0.1 + random() * Math.min(0.6, 0.9 - memberShare);
-  return { memberShare, bondShare };
+  return { memberShare, bondShare, connectivityMask: 1 + Math.floor(random() * 3) };
 }
 
 function mutate(parent, random) {
   return {
     memberShare: Math.max(0.1, Math.min(0.9, parent.memberShare + (random() - 0.5) * 0.2)),
-    bondShare: Math.max(0.05, Math.min(0.8, parent.bondShare + (random() - 0.5) * 0.2))
+    bondShare: Math.max(0.05, Math.min(0.8, parent.bondShare + (random() - 0.5) * 0.2)),
+    connectivityMask: random() < 0.18 ? (1 + Math.floor(random() * 3)) : parent.connectivityMask
   };
 }
 
-function makeGroup(seed) {
+function makeGroup(seed, connectivityMask = 3) {
   const simulation = new Simulation(); simulation.stop(); simulation.setSeed(seed); simulation.stop();
   // This benchmark holds members in place; movement is charged only in tasks
   // that request movement. Live ecology keeps its normal movement cost.
@@ -47,15 +48,15 @@ function makeGroup(seed) {
   for (const [organism, role, x] of [[sender, "sender", 10], [relay, "relay", 11], [receiver, "receiver", 12]]) { organism.x = x; organism.y = 10; organism.energy = INITIAL_ENERGY; organism.brain = brain(role); }
   simulation.bonds.clear();
   const bond = (firstId, secondId) => ({ firstId, secondId, strength: 1, reserve: INITIAL_BOND_RESERVE, bondTrace: 1, componentCommitment: 1, topologyTrace: 1, topologyLastPulseTick: null, lastPulseTick: null, lastPulseEvent: "maintenance-allocation" });
-  simulation.bonds.set(simulation.bondKey(sender.id, relay.id), bond(sender.id, relay.id));
-  simulation.bonds.set(simulation.bondKey(relay.id, receiver.id), bond(relay.id, receiver.id));
+  if (connectivityMask & 1) simulation.bonds.set(simulation.bondKey(sender.id, relay.id), bond(sender.id, relay.id));
+  if (connectivityMask & 2) simulation.bonds.set(simulation.bondKey(relay.id, receiver.id), bond(relay.id, receiver.id));
   return { simulation, sender, relay, receiver };
 }
 
 function evaluate(parameters, seed, resourceEnabled = true, controls = {}) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
-  const { simulation, sender, relay, receiver } = makeGroup(seed);
+  const { simulation, sender, relay, receiver } = makeGroup(seed, parameters.connectivityMask ?? 3);
   if (controls.removedLink === "first") simulation.bonds.delete(simulation.bondKey(sender.id, relay.id));
   if (controls.removedLink === "second") simulation.bonds.delete(simulation.bondKey(relay.id, receiver.id));
   let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let firstDeathAudit = null; let earlyLedger = []; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let pendingPerceptionNeed = 0; let lastRelayState = 0; let lastReceiverState = 0;
@@ -83,6 +84,8 @@ function evaluate(parameters, seed, resourceEnabled = true, controls = {}) {
       const states = simulation.getNeighborStatesByOrganism();
       const neighborStatesFor = (id) => {
         const values = states.get(id) ?? [];
+        if (controls.specificNeighborChannels && id === relay.id) return values.filter((neighbor) => neighbor.id === sender.id);
+        if (controls.specificNeighborChannels && id === receiver.id) return values.filter((neighbor) => neighbor.id === relay.id);
         if (!controls.shuffleNeighborIdentity) return values;
         return values.map((neighbor, index) => ({ id: 100000 + index, value: neighbor.value }));
       };
@@ -137,7 +140,8 @@ function evaluate(parameters, seed, resourceEnabled = true, controls = {}) {
   }
   const accuracy = attempted ? correct / attempted : 0;
   const survival = attempted / EPISODES;
-  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, advancePaid, workBudgetPaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, firstDeathAudit, earlyLedger, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, workBudgetIn: workBudgetPaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 };
+  const linkCount = ((parameters.connectivityMask ?? 3) & 1 ? 1 : 0) + ((parameters.connectivityMask ?? 3) & 2 ? 1 : 0);
+  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, linkCount, advancePaid, workBudgetPaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, firstDeathAudit, earlyLedger, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, workBudgetIn: workBudgetPaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 - linkCount * 0.005 };
 }
 
 function run(seed) {
@@ -151,7 +155,7 @@ function run(seed) {
     while (population.length < POPULATION) population.push(random() < 0.15 ? randomParams(random) : mutate(survivors[Math.floor(random() * survivors.length)], random));
   }
   const best = population.map((parameters) => ({ parameters, score: evaluate(parameters, seed + 99991).fitness })).sort((a, b) => b.score - a.score)[0];
-  return { seed, resourceEnabled: evaluate(best.parameters, seed + 99991, true), resourceDisabled: evaluate(best.parameters, seed + 99991, false), firstLinkRemoved: evaluate(best.parameters, seed + 99991, true, { removedLink: "first" }), secondLinkRemoved: evaluate(best.parameters, seed + 99991, true, { removedLink: "second" }), shuffledNeighborIdentity: evaluate(best.parameters, seed + 99991, true, { shuffleNeighborIdentity: true }), parameters: best.parameters };
+  return { seed, resourceEnabled: evaluate(best.parameters, seed + 99991, true, { specificNeighborChannels: true }), resourceDisabled: evaluate(best.parameters, seed + 99991, false, { specificNeighborChannels: true }), firstLinkRemoved: evaluate(best.parameters, seed + 99991, true, { removedLink: "first", specificNeighborChannels: true }), secondLinkRemoved: evaluate(best.parameters, seed + 99991, true, { removedLink: "second", specificNeighborChannels: true }), shuffledNeighborIdentity: evaluate(best.parameters, seed + 99991, true, { shuffleNeighborIdentity: true }), parameters: best.parameters };
 }
 
 console.log(JSON.stringify({ protocol: { task: "sustained three-member bonded memory with evolved maintenance allocation", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodes: EPISODES, initialEnergy: INITIAL_ENERGY, initialBondReserve: INITIAL_BOND_RESERVE, taskResourcePool: TASK_RESOURCE_POOL, workAdvance: WORK_ADVANCE, preResponseBudget: PRE_RESPONSE_BUDGET, progressThreshold: PROGRESS_THRESHOLD, deliveryWindowTicks: DELIVERY_WINDOW_TICKS, taskReward: TASK_REWARD, operatingCostScale: OPERATING_COST_SCALE, fitness: "accuracy + 0.1 survival", resourceRule: "bounded startup advance, progress-gated window, and reward are deducted from one declared pool; only measured perception expense is escrow-eligible; allocations are ledgered; no energy minting", finiteEnergyBoundary: "energy <= 0 marks death and ends later episodes" }, runs: SEEDS.map(run) }, null, 2));
