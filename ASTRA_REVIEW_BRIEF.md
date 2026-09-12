@@ -365,3 +365,27 @@ communication. The next step should add a small, explicit pre-response work
 budget tied to processing cost (still deducted from the task pool), then test
 whether successful communication—not mere longevity—improves before topology
 evolution.
+
+## Pre-response processing budget (2026-09-13)
+
+The isolated maintenance study now includes a capped `0.5`-unit per-tick
+pre-response work budget, deducted from the same finite task pool and split
+among the three members. It is released only while the group is intact, before
+the response is known; successful responses still earn the separate bounded
+reward. The ledger records this inflow independently.
+
+At the full budget, the two best configurations were rerun across all eight
+seeds:
+
+| Advance | Cost scale | Resource-on accuracy | Survival | Bond loss | Resource-off accuracy | Off survival |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1.5 | 1.0 | 81.2% | 21.9% | 1.56 | 83.3% | 17.2% |
+| 3.0 | 0.5 | 81.9% | **26.6%** | **1.47** | 85.4% | 18.0% |
+
+First deaths moved from episode 3–4 to episode 4–5 in the best cell, and bond
+loss decreased. Accuracy still did not exceed the resource-disabled control,
+so the budget is currently buying persistence more reliably than useful
+communication. This is a positive survival signal, but not sufficient to
+promote the mechanism. The next step is to make the work budget conditional on
+measurable processing progress (state transition or relay delivery), preventing
+durability-only strategies from consuming the task pool.

@@ -10,7 +10,8 @@ const INITIAL_ENERGY = 42;
 const INITIAL_BOND_RESERVE = 4;
 const TASK_REWARD = 8;
 const WORK_ADVANCE = Number(process.env.GENESIS_MA_WORK_ADVANCE ?? 1.5);
-const TASK_RESOURCE_POOL = EPISODES * (WORK_ADVANCE + TASK_REWARD);
+const PRE_RESPONSE_BUDGET = Number(process.env.GENESIS_MA_PRE_RESPONSE_BUDGET ?? 0.5);
+const TASK_RESOURCE_POOL = EPISODES * (WORK_ADVANCE + TASK_REWARD + PRE_RESPONSE_BUDGET * 8);
 const OPERATING_COST_SCALE = Number(process.env.GENESIS_MA_OPERATING_COST_SCALE ?? 1);
 
 function brain(role) {
@@ -50,7 +51,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   const { simulation, sender, relay, receiver } = makeGroup(seed);
-  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let elapsedTicks = 0;
+  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let elapsedTicks = 0;
   for (let episode = 0; episode < EPISODES; episode += 1) {
     const cue = episode % 2; const delay = 4 + Math.floor(random() * 9);
     simulation.world.signalField = Array.from({ length: simulation.world.height }, () => Array(simulation.world.width).fill(0));
@@ -63,6 +64,11 @@ function evaluate(parameters, seed, resourceEnabled = true) {
     }
     for (let tick = 0; tick < delay + 3; tick += 1) {
       if (![sender, relay, receiver].every((member) => member.alive)) break;
+      if (resourceEnabled && [sender, relay, receiver].every((member) => member.alive) && pool >= PRE_RESPONSE_BUDGET) {
+        const perMember = PRE_RESPONSE_BUDGET / 3;
+        for (const member of [sender, relay, receiver]) member.energy += perMember;
+        pool -= PRE_RESPONSE_BUDGET; workBudgetPaid += PRE_RESPONSE_BUDGET; memberAllocated += PRE_RESPONSE_BUDGET;
+      }
       const states = simulation.getNeighborStatesByOrganism();
       const common = { world: simulation.world, occupiedKeys: new Set(), config: simulation.config.organism, ecologyConfig: simulation.config.ecology, signalConfig: simulation.config.signal, environmentMemoryConfig: simulation.config.environmentMemory, coupled: true, brainExecutor: simulation.brainExecutor };
       sender.act({ ...common, neighborStates: states.get(sender.id) ?? [] });
@@ -90,7 +96,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
   }
   const accuracy = attempted ? correct / attempted : 0;
   const survival = attempted / EPISODES;
-  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, advancePaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 };
+  return { accuracy, survival, meanBondLoss: totalBondLoss / EPISODES, advancePaid, workBudgetPaid, rewardPaid, poolRemaining: pool, firstDeathEpisode, elapsedTicks, ledger: { initialPool: resourceEnabled ? TASK_RESOURCE_POOL : 0, advanceIn: advancePaid, workBudgetIn: workBudgetPaid, rewardIn: rewardPaid, memberAllocated, bondAllocated, unspent: pool }, fitness: accuracy + survival * 0.1 };
 }
 
 function run(seed) {
@@ -107,4 +113,4 @@ function run(seed) {
   return { seed, resourceEnabled: evaluate(best.parameters, seed + 99991, true), resourceDisabled: evaluate(best.parameters, seed + 99991, false), parameters: best.parameters };
 }
 
-console.log(JSON.stringify({ protocol: { task: "sustained three-member bonded memory with evolved maintenance allocation", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodes: EPISODES, initialEnergy: INITIAL_ENERGY, initialBondReserve: INITIAL_BOND_RESERVE, taskResourcePool: TASK_RESOURCE_POOL, workAdvance: WORK_ADVANCE, taskReward: TASK_REWARD, operatingCostScale: OPERATING_COST_SCALE, fitness: "accuracy + 0.1 survival", resourceRule: "bounded startup advance and reward are deducted from one declared pool; split between members and bond reserve; no energy minting", finiteEnergyBoundary: "energy <= 0 marks death and ends later episodes" }, runs: SEEDS.map(run) }, null, 2));
+console.log(JSON.stringify({ protocol: { task: "sustained three-member bonded memory with evolved maintenance allocation", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodes: EPISODES, initialEnergy: INITIAL_ENERGY, initialBondReserve: INITIAL_BOND_RESERVE, taskResourcePool: TASK_RESOURCE_POOL, workAdvance: WORK_ADVANCE, preResponseBudget: PRE_RESPONSE_BUDGET, taskReward: TASK_REWARD, operatingCostScale: OPERATING_COST_SCALE, fitness: "accuracy + 0.1 survival", resourceRule: "bounded startup advance, per-tick pre-response work budget, and reward are deducted from one declared pool; allocations are ledgered; no energy minting", finiteEnergyBoundary: "energy <= 0 marks death and ends later episodes" }, runs: SEEDS.map(run) }, null, 2));
