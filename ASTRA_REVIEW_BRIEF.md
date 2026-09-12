@@ -314,3 +314,28 @@ matched sweep, recording pool depletion and first-death tick. Do not add a
 larger survival reward or alter live defaults until a finite-budget group can
 complete most episodes with communication-disabled performance remaining at
 chance.
+
+## Escrow/cost sweep (2026-09-13)
+
+A matched six-cell sweep varied work advance (`0.75`, `1.5`, `3.0`) and
+isolated operating-cost scale (`1.0`, `0.5`) using the same eight seeds and
+reduced exploratory budget (10 candidates, 10 generations, 12 episodes) in
+each cell. Mean results:
+
+| Advance | Cost scale | Resource-on accuracy | Survival | Bond loss | Resource-off accuracy | Off survival |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0.75 | 1.0 | 85.4% | 24.0% | 1.52 | 83.3% | 22.9% |
+| 1.5 | 1.0 | **87.5%** | 25.0% | 1.50 | 83.3% | 22.9% |
+| 3.0 | 1.0 | 84.4% | 26.0% | 1.48 | 83.3% | 22.9% |
+| 0.75 | 0.5 | 84.4% | 26.0% | 1.48 | 85.4% | 24.0% |
+| 1.5 | 0.5 | 84.4% | 28.1% | 1.44 | 85.4% | 24.0% |
+| 3.0 | 0.5 | 81.2% | **29.2%** | **1.32** | 85.4% | 24.0% |
+
+The positive signal is survival: lower operating cost and larger escrow reduce
+bond loss, with the best cell retaining roughly 29% of episode participation
+and 1.32 lost bonds per run. Accuracy does not improve monotonically, and the
+resource-off control remains high on some seeds, so this is not yet evidence
+that maintenance allocation is selecting useful communication rather than
+durability. The next step is to add a task-linked resource producer and a
+first-death/energy-ledger trace, then repeat the best two cells at the full
+search budget.

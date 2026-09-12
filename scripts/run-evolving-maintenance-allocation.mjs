@@ -9,8 +9,9 @@ const EPISODES = Number(process.env.GENESIS_MA_EPISODES ?? 16);
 const INITIAL_ENERGY = 42;
 const INITIAL_BOND_RESERVE = 4;
 const TASK_REWARD = 8;
-const WORK_ADVANCE = 1.5;
+const WORK_ADVANCE = Number(process.env.GENESIS_MA_WORK_ADVANCE ?? 1.5);
 const TASK_RESOURCE_POOL = EPISODES * (WORK_ADVANCE + TASK_REWARD);
+const OPERATING_COST_SCALE = Number(process.env.GENESIS_MA_OPERATING_COST_SCALE ?? 1);
 
 function brain(role) {
   const source = role === "sender" ? "p19-input" : "p31-neighbor-state";
@@ -32,6 +33,9 @@ function mutate(parent, random) {
 
 function makeGroup(seed) {
   const simulation = new Simulation(); simulation.stop(); simulation.setSeed(seed); simulation.stop();
+  simulation.config.organism.couplingMaintenance *= OPERATING_COST_SCALE;
+  simulation.config.organism.persistenceMaintenance *= OPERATING_COST_SCALE;
+  simulation.config.signal.emissionCost *= OPERATING_COST_SCALE;
   simulation.organisms = simulation.organisms.slice(0, 3);
   const [sender, relay, receiver] = simulation.organisms;
   for (const [organism, role, x] of [[sender, "sender", 10], [relay, "relay", 11], [receiver, "receiver", 12]]) { organism.x = x; organism.y = 10; organism.energy = INITIAL_ENERGY; organism.brain = brain(role); }
@@ -101,4 +105,4 @@ function run(seed) {
   return { seed, resourceEnabled: evaluate(best.parameters, seed + 99991, true), resourceDisabled: evaluate(best.parameters, seed + 99991, false), parameters: best.parameters };
 }
 
-console.log(JSON.stringify({ protocol: { task: "sustained three-member bonded memory with evolved maintenance allocation", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodes: EPISODES, initialEnergy: INITIAL_ENERGY, initialBondReserve: INITIAL_BOND_RESERVE, taskResourcePool: TASK_RESOURCE_POOL, workAdvance: WORK_ADVANCE, taskReward: TASK_REWARD, fitness: "accuracy + 0.1 survival", resourceRule: "bounded startup advance and reward are deducted from one declared pool; split between members and bond reserve; no energy minting", finiteEnergyBoundary: "energy <= 0 marks death and ends later episodes" }, runs: SEEDS.map(run) }, null, 2));
+console.log(JSON.stringify({ protocol: { task: "sustained three-member bonded memory with evolved maintenance allocation", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodes: EPISODES, initialEnergy: INITIAL_ENERGY, initialBondReserve: INITIAL_BOND_RESERVE, taskResourcePool: TASK_RESOURCE_POOL, workAdvance: WORK_ADVANCE, taskReward: TASK_REWARD, operatingCostScale: OPERATING_COST_SCALE, fitness: "accuracy + 0.1 survival", resourceRule: "bounded startup advance and reward are deducted from one declared pool; split between members and bond reserve; no energy minting", finiteEnergyBoundary: "energy <= 0 marks death and ends later episodes" }, runs: SEEDS.map(run) }, null, 2));
