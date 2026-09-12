@@ -421,6 +421,20 @@ is earlier member energy drain, not only post-delivery funding. The next step is
 to audit per-tick energy costs and make only necessary processing cost eligible
 for escrow, retaining the same causal controls.
 
+## Cue-relevant perception escrow (2026-09-13)
+
+Escrow eligibility was narrowed to the measured `perception` expense returned
+by `Organism.act`; maintenance, coupling, signaling, and memory costs remain
+self-funded. Release still requires the progress threshold and delivery window.
+
+The full eight-seed rerun at advance `3.0` and cost scale `0.5` produced 81.2%
+resource-on accuracy, 21.9% survival, and 1.56 mean bond losses, versus 85.4%
+accuracy and 18.0% survival without resources. Perception credits averaged
+3.42 units and first deaths remained at episodes 3–4. The unchanged outcome
+confirms that perception alone is not the missing resource; the next step is to
+instrument the complete per-tick ledger over the first three episodes and
+identify the earliest irreversible loss before changing allocation again.
+
 ## Per-member first-death audit (2026-09-13)
 
 The strongest configuration was rerun with first-death snapshots capturing the
