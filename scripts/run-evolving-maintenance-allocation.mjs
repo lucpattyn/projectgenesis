@@ -52,10 +52,12 @@ function makeGroup(seed) {
   return { simulation, sender, relay, receiver };
 }
 
-function evaluate(parameters, seed, resourceEnabled = true) {
+function evaluate(parameters, seed, resourceEnabled = true, controls = {}) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   const { simulation, sender, relay, receiver } = makeGroup(seed);
+  if (controls.removedLink === "first") simulation.bonds.delete(simulation.bondKey(sender.id, relay.id));
+  if (controls.removedLink === "second") simulation.bonds.delete(simulation.bondKey(relay.id, receiver.id));
   let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let firstDeathAudit = null; let earlyLedger = []; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let pendingPerceptionNeed = 0; let lastRelayState = 0; let lastReceiverState = 0;
   for (let episode = 0; episode < EPISODES; episode += 1) {
     const cue = episode % 2; const delay = 4 + Math.floor(random() * 9);
@@ -79,10 +81,15 @@ function evaluate(parameters, seed, resourceEnabled = true) {
         pendingPerceptionNeed = 0;
       }
       const states = simulation.getNeighborStatesByOrganism();
+      const neighborStatesFor = (id) => {
+        const values = states.get(id) ?? [];
+        if (!controls.shuffleNeighborIdentity) return values;
+        return values.map((neighbor, index) => ({ id: 100000 + index, value: neighbor.value }));
+      };
       const common = { world: simulation.world, occupiedKeys: new Set(), config: simulation.config.organism, ecologyConfig: simulation.config.ecology, signalConfig: simulation.config.signal, environmentMemoryConfig: simulation.config.environmentMemory, coupled: true, brainExecutor: simulation.brainExecutor };
-      const senderResult = sender.act({ ...common, neighborStates: states.get(sender.id) ?? [] });
-      const relayResult = relay.act({ ...common, neighborStates: states.get(relay.id) ?? [] });
-      const receiverResult = receiver.act({ ...common, neighborStates: states.get(receiver.id) ?? [] });
+      const senderResult = sender.act({ ...common, neighborStates: neighborStatesFor(sender.id) });
+      const relayResult = relay.act({ ...common, neighborStates: neighborStatesFor(relay.id) });
+      const receiverResult = receiver.act({ ...common, neighborStates: neighborStatesFor(receiver.id) });
       // Explicit finite-energy boundary: zero energy ends the member before
       // another episode can silently continue it.
       for (const member of [sender, relay, receiver]) if (member.energy <= 0) { member.energy = 0; member.alive = false; member.deathReason = "finite-energy-budget"; }
@@ -124,7 +131,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
       elapsedTicks += 1;
     }
     const response = (receiver.brainExecution?.effectors.signal ?? 0) >= simulation.config.signal.activationThreshold ? 1 : 0;
-    const valid = [sender, relay, receiver].every((member) => member.alive) && simulation.bonds.size === 2;
+    const valid = [sender, relay, receiver].every((member) => member.alive);
     if (valid) { attempted += 1; if (response === cue) { correct += 1; if (resourceEnabled && pool >= TASK_REWARD) { const memberReward = TASK_REWARD * parameters.memberShare; const bondReward = TASK_REWARD * parameters.bondShare; for (const member of [sender, relay, receiver]) member.energy += memberReward / 3; for (const bond of simulation.bonds.values()) bond.reserve += bondReward / 2; pool -= TASK_REWARD; memberAllocated += memberReward; bondAllocated += bondReward; rewardPaid += TASK_REWARD; } } }
     totalBondLoss += 2 - simulation.bonds.size;
   }
@@ -144,7 +151,7 @@ function run(seed) {
     while (population.length < POPULATION) population.push(random() < 0.15 ? randomParams(random) : mutate(survivors[Math.floor(random() * survivors.length)], random));
   }
   const best = population.map((parameters) => ({ parameters, score: evaluate(parameters, seed + 99991).fitness })).sort((a, b) => b.score - a.score)[0];
-  return { seed, resourceEnabled: evaluate(best.parameters, seed + 99991, true), resourceDisabled: evaluate(best.parameters, seed + 99991, false), parameters: best.parameters };
+  return { seed, resourceEnabled: evaluate(best.parameters, seed + 99991, true), resourceDisabled: evaluate(best.parameters, seed + 99991, false), firstLinkRemoved: evaluate(best.parameters, seed + 99991, true, { removedLink: "first" }), secondLinkRemoved: evaluate(best.parameters, seed + 99991, true, { removedLink: "second" }), shuffledNeighborIdentity: evaluate(best.parameters, seed + 99991, true, { shuffleNeighborIdentity: true }), parameters: best.parameters };
 }
 
 console.log(JSON.stringify({ protocol: { task: "sustained three-member bonded memory with evolved maintenance allocation", seeds: SEEDS, population: POPULATION, generations: GENERATIONS, episodes: EPISODES, initialEnergy: INITIAL_ENERGY, initialBondReserve: INITIAL_BOND_RESERVE, taskResourcePool: TASK_RESOURCE_POOL, workAdvance: WORK_ADVANCE, preResponseBudget: PRE_RESPONSE_BUDGET, progressThreshold: PROGRESS_THRESHOLD, deliveryWindowTicks: DELIVERY_WINDOW_TICKS, taskReward: TASK_REWARD, operatingCostScale: OPERATING_COST_SCALE, fitness: "accuracy + 0.1 survival", resourceRule: "bounded startup advance, progress-gated window, and reward are deducted from one declared pool; only measured perception expense is escrow-eligible; allocations are ledgered; no energy minting", finiteEnergyBoundary: "energy <= 0 marks death and ends later episodes" }, runs: SEEDS.map(run) }, null, 2));

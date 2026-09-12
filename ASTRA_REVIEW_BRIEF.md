@@ -366,6 +366,28 @@ budget tied to processing cost (still deducted from the task pool), then test
 whether successful communication—not mere longevity—improves before topology
 evolution.
 
+## Communication-specific controls after movement correction (2026-09-13)
+
+The link-removal validity check was corrected so a damaged group is still scored
+while its surviving members remain alive. With the stationary cost correction,
+the exploratory rerun (12 candidates, 12 generations, 12 episodes, eight seeds)
+produced:
+
+| Condition | Accuracy | Survival |
+|---|---:|---:|
+| Resource-enabled, both links | 86.5% | 100% |
+| Resource-disabled | 86.5% | 100% |
+| First link removed | 50.0% | 100% |
+| Second link removed | 50.0% | 100% |
+| Neighbor identities shuffled | 86.5% | 100% |
+
+Removing either physical link returns performance to chance, confirming that
+the response depends on the two-link path. Shuffling identities has no effect
+because the current Prime-31 executor aggregates neighbor values by mean; this
+is an explicit limitation, not evidence that identity is irrelevant in a richer
+topology. The next step is to preserve per-neighbor channels (or use a relay
+specific state) and rerun the same controls before evolving connectivity.
+
 ## Progress-gated work budget (2026-09-13)
 
 The pre-response budget is now released after the startup advance only when the
