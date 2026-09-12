@@ -53,7 +53,7 @@ function evaluate(parameters, seed, resourceEnabled = true) {
   let state = seed >>> 0;
   const random = () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 4294967296; };
   const { simulation, sender, relay, receiver } = makeGroup(seed);
-  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let lastRelayState = 0; let lastReceiverState = 0;
+  let correct = 0; let attempted = 0; let totalBondLoss = 0; let rewardPaid = 0; let advancePaid = 0; let workBudgetPaid = 0; let memberAllocated = 0; let bondAllocated = 0; let pool = resourceEnabled ? TASK_RESOURCE_POOL : 0; let firstDeathEpisode = null; let elapsedTicks = 0; let progressCreditPending = false; let deliveryWindow = 0; let pendingProcessingNeed = 0; let lastRelayState = 0; let lastReceiverState = 0;
   for (let episode = 0; episode < EPISODES; episode += 1) {
     const cue = episode % 2; const delay = 4 + Math.floor(random() * 9);
     simulation.world.signalField = Array.from({ length: simulation.world.height }, () => Array(simulation.world.width).fill(0));
@@ -66,18 +66,20 @@ function evaluate(parameters, seed, resourceEnabled = true) {
     }
     for (let tick = 0; tick < delay + 3; tick += 1) {
       if (![sender, relay, receiver].every((member) => member.alive)) break;
-      if (resourceEnabled && (progressCreditPending || deliveryWindow > 0) && [sender, relay, receiver].every((member) => member.alive) && pool >= PRE_RESPONSE_BUDGET) {
-        const perMember = PRE_RESPONSE_BUDGET / 3;
+      const processingCredit = Math.min(PRE_RESPONSE_BUDGET, pendingProcessingNeed);
+      if (resourceEnabled && (progressCreditPending || deliveryWindow > 0) && processingCredit > 0 && [sender, relay, receiver].every((member) => member.alive) && pool >= processingCredit) {
+        const perMember = processingCredit / 3;
         for (const member of [sender, relay, receiver]) member.energy += perMember;
-        pool -= PRE_RESPONSE_BUDGET; workBudgetPaid += PRE_RESPONSE_BUDGET; memberAllocated += PRE_RESPONSE_BUDGET;
+        pool -= processingCredit; workBudgetPaid += processingCredit; memberAllocated += processingCredit;
         progressCreditPending = false;
         if (deliveryWindow > 0) deliveryWindow -= 1;
+        pendingProcessingNeed = 0;
       }
       const states = simulation.getNeighborStatesByOrganism();
       const common = { world: simulation.world, occupiedKeys: new Set(), config: simulation.config.organism, ecologyConfig: simulation.config.ecology, signalConfig: simulation.config.signal, environmentMemoryConfig: simulation.config.environmentMemory, coupled: true, brainExecutor: simulation.brainExecutor };
-      sender.act({ ...common, neighborStates: states.get(sender.id) ?? [] });
-      relay.act({ ...common, neighborStates: states.get(relay.id) ?? [] });
-      receiver.act({ ...common, neighborStates: states.get(receiver.id) ?? [] });
+      const senderResult = sender.act({ ...common, neighborStates: states.get(sender.id) ?? [] });
+      const relayResult = relay.act({ ...common, neighborStates: states.get(relay.id) ?? [] });
+      const receiverResult = receiver.act({ ...common, neighborStates: states.get(receiver.id) ?? [] });
       // Explicit finite-energy boundary: zero energy ends the member before
       // another episode can silently continue it.
       for (const member of [sender, relay, receiver]) if (member.energy <= 0) { member.energy = 0; member.alive = false; member.deathReason = "finite-energy-budget"; }
@@ -95,6 +97,10 @@ function evaluate(parameters, seed, resourceEnabled = true) {
       const receiverProgress = Math.abs(receiverState - lastReceiverState) >= PROGRESS_THRESHOLD;
       progressCreditPending = relayProgress || receiverProgress;
       if (receiverProgress && receiverState > 0.1) deliveryWindow = DELIVERY_WINDOW_TICKS;
+      const processingExpenses = [senderResult, relayResult, receiverResult]
+        .map((result) => result?.energyFlow?.expenses ?? {})
+        .reduce((sum, expenses) => sum + (expenses.maintenance ?? 0) + (expenses.perception ?? 0) + (expenses.memory ?? 0) + (expenses.signals ?? 0) + (expenses.bonds ?? 0), 0);
+      pendingProcessingNeed = processingExpenses;
       lastRelayState = relayState; lastReceiverState = receiverState;
       if (tick === 0) simulation.world.signalField = Array.from({ length: simulation.world.height }, () => Array(simulation.world.width).fill(0));
       simulation.world.decaySignals(simulation.config.signal.decay);

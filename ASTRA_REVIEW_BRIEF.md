@@ -420,3 +420,19 @@ The added window did not improve task accuracy, indicating that the bottleneck
 is earlier member energy drain, not only post-delivery funding. The next step is
 to audit per-tick energy costs and make only necessary processing cost eligible
 for escrow, retaining the same causal controls.
+
+## Expense-matched processing escrow (2026-09-13)
+
+The progress-gated escrow was tightened further: each credit is now capped by
+the measured prior tick's actual processing expenses (maintenance, perception,
+memory, signaling, and bond coupling), in addition to the progress threshold
+and delivery window. Idle activity cannot earn more than it actually cost.
+
+At the full best configuration (advance `3.0`, cost scale `0.5`, eight seeds),
+results remained 81.2% accuracy, 21.9% survival, and 1.56 mean bond losses;
+the resource-disabled control remained 85.4% accuracy and 18.0% survival.
+Expense-matched work averaged 4.75 units and first deaths remained at episodes
+3–4. The unchanged result is informative: the current failure is not caused by
+over-crediting processing expense. The next step should instrument the exact
+energy ledger per member and identify which cost (coupling, signaling, or
+ordinary metabolic maintenance) causes the first death before changing policy.
