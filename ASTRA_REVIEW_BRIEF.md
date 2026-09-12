@@ -244,3 +244,27 @@ the script's per-episode traces.
 The next evidence-supported action is sustained repeated cues under a finite
 energy budget, with a resource-disabled control. Do not yet evolve topology or
 change live defaults.
+
+## Sustained finite-budget run (2026-09-13)
+
+`scripts/run-sustained-group-memory.mjs` ran eight fresh seeds
+(`160128–160135`) for 16 alternating episodes each, with no internal-state
+reset between episodes, randomized 4–12 tick delays, initial member energy
+`90`, and initial reserve `10`. Member act costs and bond reserve decay were
+charged; no energy was minted. The resource-disabled condition is a declared
+finite-budget run with no external refill (the current isolated task has no
+resource producer yet), while communication-disabled removes neighbor state.
+
+| Condition | Mean accuracy | Bond loss |
+|---|---:|---:|
+| Sustained communication | **87.5%** (75.0–100.0% per seed) | 0.00 mean; 2 bonds remained |
+| Resource disabled | **87.5%**, identical | 0.00 mean |
+| Communication disabled | **50.0%** on every seed | 0.00 mean |
+
+All seeds completed all 16 episodes despite energy reaching zero by the end;
+this indicates the isolated `Organism.act` path does not yet terminate a
+member at zero energy. The positive result demonstrates repeated updating and
+communication, but it is not yet a full survival experiment. The next code
+step must add an explicit finite-energy death/resource boundary and then test
+whether task-linked resource income can sustain the group without silently
+refilling reserves.
