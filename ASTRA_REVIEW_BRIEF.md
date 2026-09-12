@@ -339,3 +339,29 @@ that maintenance allocation is selecting useful communication rather than
 durability. The next step is to add a task-linked resource producer and a
 first-death/energy-ledger trace, then repeat the best two cells at the full
 search budget.
+
+## Task-resource ledger and full-budget confirmation (2026-09-13)
+
+The maintenance script now records a complete task-resource ledger: initial
+pool, startup advances, correct-response rewards, member allocation, bond
+allocation, and unspent balance. It also records the first episode in which a
+member reaches the explicit zero-energy death boundary. Credits are released
+only from the declared pool and only at episode start or after a correct
+response.
+
+The two best sweep cells were rerun at the full budget (16 candidates, 20
+generations, 16 episodes, eight seeds):
+
+| Advance | Cost scale | Resource-on accuracy | Survival | Bond loss | Resource-off accuracy | Off survival |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1.5 | 1.0 | **87.5%** | 18.8% | 1.62 | 83.3% | 17.2% |
+| 3.0 | 0.5 | 81.2% | **21.9%** | 1.56 | 85.4% | 18.0% |
+
+First deaths occurred around episode 3–4 in every seed. The larger advance and
+lower cost modestly improved survival and bond retention, but not task accuracy;
+resource-off accuracy was sometimes higher. The evidence says the current
+allocation search preserves life briefly without reliably preserving useful
+communication. The next step should add a small, explicit pre-response work
+budget tied to processing cost (still deducted from the task pool), then test
+whether successful communication—not mere longevity—improves before topology
+evolution.
