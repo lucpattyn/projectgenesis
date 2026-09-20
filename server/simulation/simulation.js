@@ -173,7 +173,8 @@ export class Simulation {
     this.bondRelayEnergyWithdrawn = 0;
     this.bondRelayEnergyDelivered = 0;
     this.bondRelayRescues = 0;
-    this.guidedSupportStats = { budgetSpent: 0, memberSupport: 0, bondReserveSupport: 0, quietBondTicks: 0 };
+    this.guidedSupportStats = { budgetSpent: 0, memberSupport: 0, bondReserveSupport: 0, quietBondTicks: 0, supportCredits: 0, supportRewards: 0 };
+    this.guidedSupportCredits = 0;
     this.resetEnergyEconomics();
     this.resetEnergyLogistics();
     this.initializeWorkGates();
@@ -712,6 +713,7 @@ export class Simulation {
   }
 
   emitCollectivePulse(source, event, strength = 1, context = {}) {
+    this.recordGuidedSupportReward(event, strength);
     const memoryPolicy = this.config.bond.collectiveMemory;
     const topologyPolicy = this.config.bond.topologyMemory;
     const policy = memoryPolicy?.enabled ? memoryPolicy : topologyPolicy;
@@ -751,6 +753,16 @@ export class Simulation {
     this.collectiveMemoryLocations.push({ x: context.x ?? source.x, y: context.y ?? source.y, event, repeats, tick: this.simulationTicks });
     if (this.collectiveMemoryLocations.length > policy.maximumLocationRecords) this.collectiveMemoryLocations.shift();
     this.recordTopologyPulse(source, event, strength, distance);
+  }
+
+  recordGuidedSupportReward(event, strength) {
+    const mode = this.config.guidedStructuralIntelligence?.supportedDevelopment;
+    if (!mode?.enabled || mode.unconditionalSupportEnabled) return;
+    const rewardedEvents = new Set(["food", "gate", "migration", "reproduction", "scout-return", "member-support"]);
+    if (!rewardedEvents.has(event)) return;
+    const reward = Math.max(0, Number(strength) || 0) * Number(mode.supportCreditPerPulse ?? 0);
+    this.guidedSupportCredits = Math.min(Number(mode.maximumSupportCredits ?? 48), this.guidedSupportCredits + reward);
+    this.guidedSupportStats.supportRewards += reward;
   }
 
   decayCollectiveMemory() {
@@ -1759,7 +1771,8 @@ export class Simulation {
     this.bondRelayEnergyWithdrawn = 0;
     this.bondRelayEnergyDelivered = 0;
     this.bondRelayRescues = 0;
-    this.guidedSupportStats = { budgetSpent: 0, memberSupport: 0, bondReserveSupport: 0, quietBondTicks: 0 };
+    this.guidedSupportStats = { budgetSpent: 0, memberSupport: 0, bondReserveSupport: 0, quietBondTicks: 0, supportCredits: 0, supportRewards: 0 };
+    this.guidedSupportCredits = 0;
     this.initializeWorkGates();
     this.snapshotVersion += 1;
     this.seedInitialPopulation(this.config.organism.initialPopulation);
@@ -4303,8 +4316,17 @@ export class Simulation {
   applyGuidedDevelopmentSupport() {
     const mode = this.config.guidedStructuralIntelligence?.supportedDevelopment;
     if (!this.guidedInput.enabled || !mode?.enabled || mode.maintenanceBudgetPerTick <= 0) return;
-    let budget = mode.maintenanceBudgetPerTick;
+    this.guidedSupportCredits *= Number(mode.supportCreditDecay ?? 1);
+    this.guidedSupportStats.supportCredits = this.guidedSupportCredits;
     const living = this.organisms.filter((organism) => organism.alive);
+    const stressed = living.some((organism) => organism.energy < this.config.bond.supportThreshold)
+      || [...this.componentLifecycle.values()].some((component) => component.state === "migrate");
+    if (!stressed) return;
+    const unconditional = Boolean(mode.unconditionalSupportEnabled);
+    if (!unconditional && !mode.conditionalSupportEnabled) return;
+    let budget = unconditional
+      ? mode.maintenanceBudgetPerTick
+      : Math.min(mode.maintenanceBudgetPerTick, Number(mode.emergencyBudgetPerTick ?? 0) + this.guidedSupportCredits);
     for (const organism of living.filter((item) => item.energy < this.config.bond.supportThreshold).sort((a, b) => a.energy - b.energy)) {
       if (budget <= 0) break;
       const amount = Math.min(budget, mode.memberSupportPerTick, this.config.bond.supportThreshold - organism.energy);
@@ -4320,7 +4342,10 @@ export class Simulation {
       budget -= amount;
       this.guidedSupportStats.bondReserveSupport += amount;
     }
-    this.guidedSupportStats.budgetSpent += mode.maintenanceBudgetPerTick - budget;
+    const spent = (unconditional ? mode.maintenanceBudgetPerTick : Number(mode.emergencyBudgetPerTick ?? 0) + this.guidedSupportCredits) - budget;
+    if (!unconditional) this.guidedSupportCredits = Math.max(0, this.guidedSupportCredits - Math.max(0, spent - Number(mode.emergencyBudgetPerTick ?? 0)));
+    this.guidedSupportStats.supportCredits = this.guidedSupportCredits;
+    this.guidedSupportStats.budgetSpent += Math.max(0, spent);
   }
 
   setCourierEnabled(enabled) {
