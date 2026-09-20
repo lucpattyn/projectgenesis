@@ -193,6 +193,10 @@ async function handleApi(request, response, url) {
       simulation.setGuidedSupportedDevelopmentEnabled(body.guidedSupportedDevelopmentEnabled);
     }
 
+    if (body.guidedUnconditionalSupportEnabled !== undefined) {
+      simulation.config.guidedStructuralIntelligence.supportedDevelopment.unconditionalSupportEnabled = Boolean(body.guidedUnconditionalSupportEnabled);
+    }
+
     if (body.courierEnabled !== undefined) {
       simulation.setCourierEnabled(body.courierEnabled);
     }

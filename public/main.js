@@ -50,6 +50,7 @@ const environmentMemoryEnabledInput = document.getElementById("environment-memor
 const energyEconomicsPanel = document.getElementById("energy-economics-panel");
 const guidedInputEnabledInput = document.getElementById("guided-input-enabled");
 const guidedSupportEnabledInput = document.getElementById("guided-support-enabled");
+const guidedUnconditionalSupportEnabledInput = document.getElementById("guided-unconditional-support-enabled");
 const guidedPatternInput = document.getElementById("guided-pattern");
 const guidedImageUploadInput = document.getElementById("guided-image-upload");
 const guidedInputPreview = document.getElementById("guided-input-preview");
@@ -386,6 +387,7 @@ function syncControls(snapshot) {
   const guided = snapshot.guidedStructuralIntelligence ?? {};
   guidedInputEnabledInput.checked = Boolean(guided.enabled);
   guidedSupportEnabledInput.checked = Boolean(guided.supportedDevelopment?.enabled);
+  guidedUnconditionalSupportEnabledInput.checked = Boolean(guided.supportedDevelopment?.unconditionalSupportEnabled);
   guidedPatternInput.value = ["horizontal-boundary", "vertical-boundary", "closed-outline", "blank"].includes(guided.pattern) ? guided.pattern : "horizontal-boundary";
   renderGuidedInput(guided);
   const resources = snapshot.ecology.resources ?? {};
@@ -544,6 +546,7 @@ facetTrailEnabledInput.addEventListener("change", () => postJson("/api/settings"
 environmentMemoryEnabledInput.addEventListener("change", () => postJson("/api/settings", { environmentMemoryVisualizationEnabled: environmentMemoryEnabledInput.checked }));
 guidedInputEnabledInput.addEventListener("change", () => postJson("/api/settings", { guidedStructuralIntelligenceEnabled: guidedInputEnabledInput.checked }));
 guidedSupportEnabledInput.addEventListener("change", () => postJson("/api/settings", { guidedSupportedDevelopmentEnabled: guidedSupportEnabledInput.checked }));
+guidedUnconditionalSupportEnabledInput.addEventListener("change", () => postJson("/api/settings", { guidedUnconditionalSupportEnabled: guidedUnconditionalSupportEnabledInput.checked }));
 guidedPatternInput.addEventListener("change", () => postJson("/api/guided-input", { pattern: guidedPatternInput.value }));
 guidedImageUploadInput.addEventListener("change", () => {
   const file = guidedImageUploadInput.files?.[0];
