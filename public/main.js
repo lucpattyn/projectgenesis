@@ -54,10 +54,32 @@ const guidedPatternInput = document.getElementById("guided-pattern");
 const guidedImageUploadInput = document.getElementById("guided-image-upload");
 const guidedInputPreview = document.getElementById("guided-input-preview");
 const guidedInputNote = document.getElementById("guided-input-note");
+const guidedTaskStart = document.getElementById("guided-task-start");
+const guidedTaskStop = document.getElementById("guided-task-stop");
+const guidedTaskLoad = document.getElementById("guided-task-load");
+const guidedTaskEvaluate = document.getElementById("guided-task-evaluate");
+const guidedTaskStatus = document.getElementById("guided-task-status");
 
 const renderer = new Renderer(canvas);
 let currentSnapshot = null;
 let selectedOrganismId = null;
+
+function renderGuidedTaskStatus(status) {
+  if (!guidedTaskStatus || !status) return;
+  const result = status.result;
+  const runs = result?.runs ?? [];
+  const mean = runs.length ? runs.reduce((sum, run) => sum + Number(run.evaluation?.accuracy ?? 0), 0) / runs.length : null;
+  const targetCount = runs.filter((run) => Number(run.evaluation?.accuracy ?? 0) >= 0.8).length;
+  guidedTaskStatus.textContent = status.running
+    ? `Training running (pid ${status.pid ?? "?"}) · saved artifact will appear at ${status.artifact}`
+    : result
+      ? `Saved result · ${targetCount}/${runs.length} seeds ≥80% · mean unseen accuracy ${(mean * 100).toFixed(1)}% · controls included`
+      : "No benchmark has been run.";
+}
+
+async function refreshGuidedTaskStatus() {
+  try { renderGuidedTaskStatus(await fetchJson("/api/guided-task")); } catch { /* server may be starting */ }
+}
 
 const statLabels = {
   fps: "FPS",
@@ -425,6 +447,7 @@ async function postJson(url, payload) {
     body: JSON.stringify(payload)
   });
   renderSnapshot(snapshot);
+  return snapshot;
 }
 
 document.querySelectorAll("[data-action]").forEach((button) => {
@@ -540,6 +563,16 @@ guidedImageUploadInput.addEventListener("change", () => {
   };
   image.src = URL.createObjectURL(file);
 });
+guidedTaskStart?.addEventListener("click", async () => {
+  const status = await postJson("/api/guided-task", { action: "start" });
+  renderGuidedTaskStatus(status);
+});
+guidedTaskStop?.addEventListener("click", async () => {
+  const status = await postJson("/api/guided-task", { action: "stop" });
+  renderGuidedTaskStatus(status);
+});
+guidedTaskLoad?.addEventListener("click", refreshGuidedTaskStatus);
+guidedTaskEvaluate?.addEventListener("click", refreshGuidedTaskStatus);
 fireIgnitionInput.addEventListener("input", () => { fireIgnitionValue.textContent = Number(fireIgnitionInput.value).toFixed(3); });
 fireSpreadInput.addEventListener("input", () => { fireSpreadValue.textContent = Number(fireSpreadInput.value).toFixed(2); });
 fireDurationInput.addEventListener("input", () => { fireDurationValue.textContent = fireDurationInput.value; });
@@ -554,5 +587,7 @@ canvas.addEventListener("click", (event) => {
 
 loadSnapshot();
 loadExperiments();
+refreshGuidedTaskStatus();
 setInterval(loadSnapshot, 200);
 setInterval(loadExperiments, 1000);
+setInterval(refreshGuidedTaskStatus, 2000);

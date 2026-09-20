@@ -631,3 +631,9 @@ Mean unseen bonds were lower than blank (`64` versus `76.33`) and no strong
 facets formed. Treat this as causal sensing/forgetting infrastructure, not a
 successful morphology. Next add shifted, brightness/noise, shuffled, and
 raw-pixel controls before changing adaptive gains.
+
+### Guided delayed image task — current handoff (2026-09-20)
+
+Added `scripts/run-guided-image-memory-task.mjs`, `server/experiments/guided-image-task-runner.js`, `/api/guided-task`, and the UI benchmark panel. The isolated task uses a bonded sender→relay→receiver, Prime-17 local pixels, Prime-13 recurrence, and Prime-31 neighbor transport. It presents balanced horizontal/vertical 16×16 inputs for 20 ticks, removes them, waits 10–30 ticks, and measures the receiver response. Supported-development assistance is explicit, bounded, and off for ordinary ecology.
+
+Smoke artifact: `research-results/guided-image-memory-task.json`. Eight-seed smoke evaluation was `0.50, 0.50, 0.70, 0.50, 0.40, 0.80, 0.40, 0.60`; communication-disabled controls were `0.50` throughout. This confirms the path is observable but misses the frozen ≥0.80-in-6/8 target. Do not describe it as completed learning. Next work is to repair controller evolution/task separability, then run the full 8×100 unseen protocol and add support-accounting/trial-timing tests.

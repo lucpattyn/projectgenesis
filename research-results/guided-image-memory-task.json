@@ -1,0 +1,2613 @@
+{
+  "protocol": {
+    "task": "horizontal versus vertical local image → Prime-13 memory → Prime-31 relay → delayed response",
+    "seeds": [
+      160201,
+      160202,
+      160203,
+      160204,
+      160205,
+      160206,
+      160207,
+      160208
+    ],
+    "population": 4,
+    "generations": 1,
+    "trainingTrials": 4,
+    "evaluationTrials": 6,
+    "inputTicks": 20,
+    "delayRange": [
+      10,
+      30
+    ],
+    "balanced": true,
+    "support": "identical bounded supported-development budget across labels and controls",
+    "target": "at least 80% delayed accuracy in 6/8 seeds; material drop under communication/memory controls"
+  },
+  "runs": [
+    {
+      "seed": 160201,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.51625
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.5,
+      "evaluation": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.5175,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0.2,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.09
+          },
+          {
+            "label": 0,
+            "delay": 29,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 10,
+            "response": 1,
+            "responseSignal": 0.52,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.22
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0.12,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.05
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 29,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 29,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 29,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.5175,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0.2,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.09
+          },
+          {
+            "label": 0,
+            "delay": 29,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 10,
+            "response": 1,
+            "responseSignal": 0.52,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.22
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0.12,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.05
+          }
+        ]
+      }
+    },
+    {
+      "seed": 160202,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.511875
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.5,
+      "evaluation": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.4966666666666666,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0.16,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.08
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0.26,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.11
+          },
+          {
+            "label": 0,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.4879166666666667,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0.16,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.08
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.4879166666666667,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0.16,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.08
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.4966666666666666,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0.16,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.08
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0.26,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.11
+          },
+          {
+            "label": 0,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          }
+        ]
+      }
+    },
+    {
+      "seed": 160203,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.52625
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.5,
+      "evaluation": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.5208333333333334,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 20,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 16,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 1,
+            "responseSignal": 0.76,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.36
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 27,
+            "response": 1,
+            "responseSignal": 0.58,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.29
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 20,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 27,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.5075,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 20,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 16,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 1,
+            "responseSignal": 0.36,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.19
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 27,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.21
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.50875,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 20,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 16,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 27,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.21
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.5208333333333334,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 20,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 16,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 1,
+            "responseSignal": 0.76,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.36
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 27,
+            "response": 1,
+            "responseSignal": 0.58,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.29
+          }
+        ]
+      }
+    },
+    {
+      "seed": 160204,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.518125
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.5,
+      "evaluation": {
+        "accuracy": 0.5,
+        "fitness": 0.5095833333333334,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 18,
+            "response": 0,
+            "responseSignal": 0.14,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.06
+          },
+          {
+            "label": 0,
+            "delay": 22,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0.26,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.11
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0.2,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.11
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0.26,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.11
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 18,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 22,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.5,
+        "fitness": 0.49583333333333335,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 18,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 22,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0.2,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.11
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.5,
+        "fitness": 0.49374999999999997,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 18,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 22,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0.3,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.15
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5095833333333334,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 18,
+            "response": 0,
+            "responseSignal": 0.14,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.06
+          },
+          {
+            "label": 0,
+            "delay": 22,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0.26,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.11
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0.2,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.11
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0.26,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.11
+          }
+        ]
+      }
+    },
+    {
+      "seed": 160205,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.5193749999999999
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.75,
+      "evaluation": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.5016666666666667,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 23,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 13,
+            "response": 0,
+            "responseSignal": 0.3,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.13
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0.12,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.05
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 23,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 13,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.49124999999999996,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 23,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 13,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.49124999999999996,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 23,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 13,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.5016666666666667,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 23,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 13,
+            "response": 0,
+            "responseSignal": 0.3,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.13
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 16,
+            "response": 0,
+            "responseSignal": 0.12,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.05
+          }
+        ]
+      }
+    },
+    {
+      "seed": 160206,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.5125
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.75,
+      "evaluation": {
+        "accuracy": 0.8333333333333334,
+        "fitness": 0.5212499999999999,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 22,
+            "response": 1,
+            "responseSignal": 0.58,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.29
+          },
+          {
+            "label": 0,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 1,
+            "responseSignal": 0.36,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.15
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 22,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.50875,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 22,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 0,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.50875,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 22,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 0,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.8333333333333334,
+        "fitness": 0.5212499999999999,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 22,
+            "response": 1,
+            "responseSignal": 0.58,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.29
+          },
+          {
+            "label": 0,
+            "delay": 30,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 12,
+            "response": 1,
+            "responseSignal": 0.36,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.15
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 21,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          }
+        ]
+      }
+    },
+    {
+      "seed": 160207,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.5287499999999999
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.75,
+      "evaluation": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.49874999999999997,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 28,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 15,
+            "response": 0,
+            "responseSignal": 0.2,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.09
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 28,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 15,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.49124999999999996,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 28,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 15,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.49124999999999996,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 28,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 15,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.3333333333333333,
+        "fitness": 0.49874999999999997,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 1,
+            "responseSignal": 0.42,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.21
+          },
+          {
+            "label": 1,
+            "delay": 28,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 10,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 15,
+            "response": 0,
+            "responseSignal": 0.2,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.09
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          }
+        ]
+      }
+    },
+    {
+      "seed": 160208,
+      "trainingHistory": [
+        {
+          "generation": 0,
+          "bestAccuracy": 0.5043749999999999
+        }
+      ],
+      "parameters": {
+        "sender-n": -1,
+        "sender-e": 1,
+        "sender-s": -1,
+        "sender-w": 1,
+        "senderMemory": 1,
+        "relay-input": 1,
+        "relay-memory": 1,
+        "relay-output": 1,
+        "receiver-input": 1,
+        "receiver-memory": 1,
+        "receiver-output": 2
+      },
+      "trainingAccuracy": 0.5,
+      "evaluation": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.5145833333333333,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0.18,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.07
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 1,
+            "responseSignal": 0.44,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.18
+          }
+        ]
+      },
+      "communicationDisabled": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "memoryErasedAfterInput": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "blankInput": {
+        "accuracy": 0.5,
+        "fitness": 0.5,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0
+          }
+        ]
+      },
+      "supportDisabled": {
+        "accuracy": 0.6666666666666666,
+        "fitness": 0.5145833333333333,
+        "trials": [
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 26,
+            "response": 0,
+            "responseSignal": 0.08,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.04
+          },
+          {
+            "label": 0,
+            "delay": 17,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 14,
+            "response": 0,
+            "responseSignal": 0.18,
+            "correct": false,
+            "bonds": 2,
+            "responseState": 0.07
+          },
+          {
+            "label": 0,
+            "delay": 24,
+            "response": 0,
+            "responseSignal": 0,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0
+          },
+          {
+            "label": 1,
+            "delay": 11,
+            "response": 1,
+            "responseSignal": 0.44,
+            "correct": true,
+            "bonds": 2,
+            "responseState": 0.18
+          }
+        ]
+      }
+    }
+  ]
+}

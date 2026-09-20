@@ -4,10 +4,12 @@ import { extname, join, normalize } from "node:path";
 import { DEFAULT_CONFIG } from "./simulation/config.js";
 import { Simulation } from "./simulation/simulation.js";
 import { ExperimentRunner } from "./experiments/experiment-runner.js";
+import { GuidedImageTaskRunner } from "./experiments/guided-image-task-runner.js";
 
 const simulation = new Simulation(DEFAULT_CONFIG);
 const publicDir = join(process.cwd(), "public");
 const experimentRunner = new ExperimentRunner(join(process.cwd(), "data", "experiment-history.json"));
+const guidedImageTaskRunner = new GuidedImageTaskRunner({ root: process.cwd() });
 
 // Optional visual bridge for the isolated bonded-memory experiment. It is
 // opt-in so normal Genesis ecology remains unchanged.
@@ -226,6 +228,24 @@ async function handleApi(request, response, url) {
     }
 
     sendJson(response, 200, simulation.getSnapshot());
+    return true;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/guided-task") {
+    sendJson(response, 200, await guidedImageTaskRunner.load());
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/guided-task") {
+    const body = await readRequestBody(request);
+    try {
+      const result = body.action === "start"
+        ? await guidedImageTaskRunner.start(body)
+        : body.action === "stop" ? guidedImageTaskRunner.stop() : await guidedImageTaskRunner.load();
+      sendJson(response, 200, result);
+    } catch (error) {
+      sendJson(response, 400, { error: error instanceof Error ? error.message : "Unable to control guided task." });
+    }
     return true;
   }
 

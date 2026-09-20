@@ -53,6 +53,19 @@
           <p class="ecology-note" id="guided-input-note">Package A is disabled; baseline ecology is unchanged.</p>
         </section>
 
+        <section class="panel-block guided-task-block">
+          <p class="eyebrow">Integrated delayed-cue task</p>
+          <h2>Horizontal ↔ vertical memory</h2>
+          <p class="ecology-note">Runs the disclosed 16×16, 20-tick image / 10–30-tick delay benchmark in an isolated worker. It does not alter live ecology defaults.</p>
+          <div class="button-grid">
+            <button id="guided-task-start" type="button">Start training</button>
+            <button id="guided-task-stop" type="button" class="secondary-button">Stop training</button>
+            <button id="guided-task-load" type="button" class="secondary-button">Load saved result</button>
+            <button id="guided-task-evaluate" type="button" class="secondary-button">Run unseen report</button>
+          </div>
+          <p class="ecology-note" id="guided-task-status">No benchmark has been run.</p>
+        </section>
+
         <section class="panel-block sidebar-brain">
           <p class="eyebrow">Live Generated Graph</p>
           <h2 id="live-brain-title">Selected Organism Brain</h2>

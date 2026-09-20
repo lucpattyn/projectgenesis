@@ -152,10 +152,14 @@ export const BASE_CONFIG = {
     },
     supportedDevelopment: {
       enabled: false,
-      maintenanceBudgetPerTick: 2,
-      memberSupportPerTick: 0.12,
-      bondReservePerTick: 0.08,
-      repairWindowTicks: 12
+      maintenanceBudgetPerTick: 24,
+      memberSupportPerTick: 0.7,
+      bondReservePerTick: 0.12,
+      repairWindowTicks: 12,
+      suppressMovement: true,
+      preserveExistingBonds: true,
+      populationCap: 48,
+      connectionCap: 96
     }
   },
   energeticEconomics: {

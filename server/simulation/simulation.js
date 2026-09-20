@@ -802,6 +802,8 @@ export class Simulation {
     const reproductionOpportunity = this.getReproductionOpportunity().opportunity;
 
     for (const organism of this.organisms) {
+      const supportMode = this.config.guidedStructuralIntelligence?.supportedDevelopment;
+      if (supportMode?.enabled && this.organisms.length + newborns.length >= supportMode.populationCap) break;
       if (!organism.canReproduce(this.config.organism)) {
         continue;
       }
@@ -4089,7 +4091,10 @@ export class Simulation {
         if (existingBond.reserve > 0) {
           existingBond.strength = Math.min(1, existingBond.strength + this.config.bond.repairPerTick);
         }
-      } else if (ticks >= this.config.bond.buddingCandidateTicks) {
+      } else if (ticks >= this.config.bond.buddingCandidateTicks
+        && this.bonds.size < (this.config.guidedStructuralIntelligence?.supportedDevelopment?.enabled
+          ? this.config.guidedStructuralIntelligence.supportedDevelopment.connectionCap
+          : Infinity)) {
         const seedEnergy = this.structuralBirthSeeds.get(key) ?? 0;
         this.bonds.set(key, {
           firstId: first.id,
@@ -4193,6 +4198,10 @@ export class Simulation {
         this.recordBondBreak(bond, reason, deadMember ? `member died: ${deadMember.deathReason ?? "unknown cause"}` : reason);
       } else if (!this.bondCandidates.has(key)) {
         const support = this.config.guidedStructuralIntelligence?.supportedDevelopment;
+        if (support?.enabled && support.preserveExistingBonds
+          && this.areAdjacent(first, second) && (bond.reserve ?? 0) > 0) {
+          continue;
+        }
         if (support?.enabled && (bond.quietTicks ?? 0) < support.repairWindowTicks
           && this.areAdjacent(first, second) && (bond.reserve ?? 0) > 0) {
           bond.quietTicks = (bond.quietTicks ?? 0) + 1;
@@ -4262,7 +4271,14 @@ export class Simulation {
   }
 
   setGuidedSupportedDevelopmentEnabled(enabled) {
-    this.config.guidedStructuralIntelligence.supportedDevelopment.enabled = Boolean(enabled);
+    const mode = this.config.guidedStructuralIntelligence.supportedDevelopment;
+    mode.enabled = Boolean(enabled);
+    if (mode.enabled) {
+      if (this._guidedOriginalMaxAge === undefined) this._guidedOriginalMaxAge = this.config.organism.maxAge;
+      this.config.organism.maxAge = Number.MAX_SAFE_INTEGER;
+    } else if (this._guidedOriginalMaxAge !== undefined) {
+      this.config.organism.maxAge = this._guidedOriginalMaxAge;
+    }
   }
 
   setGuidedPattern(pattern) {

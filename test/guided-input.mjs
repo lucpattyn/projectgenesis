@@ -18,4 +18,9 @@ assert.equal(custom.source, "test");
 assert.equal(custom.grid[0][0], 1);
 assert.equal(custom.grid[15][15], 0);
 
+const direct = { ...setGuidedGrid(horizontal, Array.from({ length: 16 }, (_, y) => Array.from({ length: 16 }, (_, x) => x === 8 ? 1 : 0)), "line"), mapping: "direct" };
+assert.equal(sampleGuidedInput(direct, 8, 3, 64, 64, 0), 1);
+assert.equal(sampleGuidedInput(direct, 3, 3, 64, 64, 0), 0);
+assert.equal(sampleGuidedInput({ ...direct, enabled: false }, 8, 3, 64, 64, 0), 0);
+
 console.log("Guided input checks passed");

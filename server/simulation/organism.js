@@ -222,7 +222,9 @@ export class Organism {
       );
     }
 
-    const shouldMove = !coupled && this.brainExecution.effectors.move >= 0.05;
+    const supportedDevelopment = guidedInputConfig.supportedDevelopment ?? {};
+    const movementAllowed = !(supportedDevelopment.enabled && supportedDevelopment.suppressMovement);
+    const shouldMove = movementAllowed && !coupled && this.brainExecution.effectors.move >= 0.05;
     const direction = shouldMove
       ? (this.genomeProfile.traits.canSenseNeighborhood
         ? this.chooseGraphDirection(world, occupiedKeys, memoryDirectionScores)
