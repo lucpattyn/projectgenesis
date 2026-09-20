@@ -152,8 +152,8 @@ export const BASE_CONFIG = {
     },
     supportedDevelopment: {
       enabled: false,
-      maintenanceBudgetPerTick: 24,
-      memberSupportPerTick: 0.7,
+      maintenanceBudgetPerTick: 192,
+      memberSupportPerTick: 8,
       bondReservePerTick: 0.12,
       repairWindowTicks: 12,
       suppressMovement: true,
