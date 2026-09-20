@@ -183,3 +183,6 @@ scaled, noisy, shuffled, and image-removed examples, with a simple raw-pixel
 baseline and topology/activity descriptors. The promotion question is whether
 the collective response predicts unseen variations and retains useful signal
 after removal without prescribed shapes.
+
+For the complete current Package A/B handoff, including the uploaded-image
+live run and exact next sequence, see `ASTRA_PACKAGE_A_B_REPORT.md`.
