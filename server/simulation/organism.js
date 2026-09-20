@@ -65,6 +65,9 @@ export class Organism {
     this.memoryEvent = memoryEvent;
     this.memoryLocation = memoryLocation;
     this.memoryRepeats = memoryRepeats;
+    this.guidedInputSignal = 0;
+    this.guidedResponseTrace = 0;
+    this.guidedResponseActivity = 0;
     this.collectiveStrideActive = false;
     this.collectiveTransportActive = false;
     this.satietyMigrationActive = false;
@@ -191,6 +194,33 @@ export class Organism {
         : 0,
       ...Object.fromEntries(Object.entries(this.perception ?? {}).map(([id, value]) => [`p17-${id}`, value]))
     }, this.brainExecution?.persistentState);
+
+    const adaptiveResponse = guidedInputConfig.adaptiveResponse ?? {};
+    if (guidedInput?.enabled && adaptiveResponse.enabled !== false) {
+      const learningRate = clamp(Number(adaptiveResponse.traceLearningRate ?? 0.22), 0, 1);
+      const maximumTrace = Math.max(0, Number(adaptiveResponse.maximumTrace ?? 1));
+      this.guidedResponseTrace = clamp(
+        this.guidedResponseTrace * (1 - learningRate) + guidedSignal * learningRate,
+        0,
+        maximumTrace
+      );
+    } else {
+      const decayRate = clamp(Number(adaptiveResponse.traceDecayRate ?? 0.94), 0, 1);
+      this.guidedResponseTrace *= decayRate;
+    }
+    this.guidedResponseActivity = Number(this.guidedResponseTrace.toFixed(3));
+    if (guidedInput?.enabled && adaptiveResponse.enabled !== false) {
+      this.brainExecution.effectors.bind = clamp(
+        this.brainExecution.effectors.bind + this.guidedResponseTrace * Number(adaptiveResponse.bindGain ?? 0.65),
+        0,
+        8
+      );
+      this.brainExecution.effectors.signal = clamp(
+        this.brainExecution.effectors.signal + this.guidedResponseTrace * Number(adaptiveResponse.signalGain ?? 0.35),
+        0,
+        8
+      );
+    }
 
     const shouldMove = !coupled && this.brainExecution.effectors.move >= 0.05;
     const direction = shouldMove
@@ -386,6 +416,8 @@ export class Organism {
       signalOutput: Number((this.brainExecution?.effectors.signal ?? 0).toFixed(2)),
       movementDecision: this.movementDecision,
       guidedInputSignal: this.guidedInputSignal ?? 0,
+      guidedResponseTrace: this.guidedResponseTrace ?? 0,
+      guidedResponseActivity: this.guidedResponseActivity ?? 0,
       nodeTrace: Number(this.nodeTrace.toFixed(3)),
       lastPulseTick: this.lastPulseTick,
       memoryEvent: this.memoryEvent,

@@ -142,6 +142,14 @@ export const BASE_CONFIG = {
     gridSize: 16,
     localRadius: 1,
     sensoryGain: 1.5,
+    adaptiveResponse: {
+      enabled: true,
+      traceLearningRate: 0.22,
+      traceDecayRate: 0.94,
+      maximumTrace: 1,
+      bindGain: 0.65,
+      signalGain: 0.35
+    },
     supportedDevelopment: {
       enabled: false,
       maintenanceBudgetPerTick: 2,

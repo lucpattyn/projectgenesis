@@ -75,3 +75,35 @@ input-dependent morphology, memory after image removal, stress conventions,
 collective reproduction, or useful communication between collectives. Those
 belong to Packages B and C and must be tested with unseen examples and causal
 controls.
+
+## Package B first screen
+
+Package B is now implemented as a bounded adaptive response trace. While the
+guided input is active, each organism moves its local trace toward its sampled
+pixel value. The trace then modestly biases the organism's existing bind and
+signal effectors. When the input is removed, the trace decays exponentially;
+there is no category-specific target, shape whitelist, or global label.
+
+Run it with:
+
+```powershell
+node scripts/run-guided-structural-evaluation.mjs
+```
+
+The first three-seed screen (`160103–160105`, 60 ticks per phase, 40 ticks
+without input) found:
+
+- unseen closed-outline response trace: `0.1339` mean with adaptive input,
+  versus `0` in the blank control;
+- after 40 input-free ticks, the guided trace fell to `0.0102`, showing the
+  intended forgetting behavior but not yet durable memory;
+- mean unseen bonds were `64` in the guided arm versus `76.33` in the blank
+  control;
+- strong facets were `0` in both arms in this short screen.
+
+Interpretation: Package B has a real causal local response and measurable
+input-removal decay, but it has not yet demonstrated input-dependent useful
+topology or retained interpretation. The next repair is measurement and
+adaptation—not stronger gains: add unseen position/brightness/noise variants,
+raw-pixel and shuffled controls, and compare response topology before and
+after removal over a longer fixed suite.

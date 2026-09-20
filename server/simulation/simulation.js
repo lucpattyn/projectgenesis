@@ -4405,6 +4405,11 @@ export class Simulation {
         ...serializeGuidedInput(this.guidedInput),
         localRadius: this.config.guidedStructuralIntelligence?.localRadius ?? 1,
         sensoryGain: this.config.guidedStructuralIntelligence?.sensoryGain ?? 1,
+        adaptiveResponse: {
+          ...this.config.guidedStructuralIntelligence?.adaptiveResponse,
+          activeTraces: this.organisms.filter((organism) => (organism.guidedResponseTrace ?? 0) > 0.001).length,
+          meanTrace: Number(average(this.organisms.map((organism) => organism.guidedResponseTrace ?? 0)).toFixed(3))
+        },
         supportedDevelopment: {
           ...this.config.guidedStructuralIntelligence?.supportedDevelopment,
           ...this.guidedSupportStats

@@ -621,3 +621,13 @@ optimization.
 This clears the prerequisite for Phase 17 morphology work. Recommended first
 morphology stage: observation and classification before assigning any new
 morphology-specific benefit/cost contracts.
+
+### Guided Structural Intelligence — Package B status
+
+`scripts/run-guided-structural-evaluation.mjs` now screens a bounded local
+adaptive trace. Across seeds `160103–160105`, unseen closed-outline trace was
+`0.1339` versus blank `0`; it decayed to `0.0102` after 40 input-free ticks.
+Mean unseen bonds were lower than blank (`64` versus `76.33`) and no strong
+facets formed. Treat this as causal sensing/forgetting infrastructure, not a
+successful morphology. Next add shifted, brightness/noise, shuffled, and
+raw-pixel controls before changing adaptive gains.

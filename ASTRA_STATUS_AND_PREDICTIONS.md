@@ -165,3 +165,21 @@ This is infrastructure, not evidence of image understanding. The next package
 must measure whether an input changes topology/activity and whether any useful
 response survives removal of the input. Blank, shuffled, raw-pixel, altered
 position/brightness/noise, and image-removal controls are mandatory.
+
+### Package B first result
+
+The bounded adaptive response trace is implemented in the existing local
+organism loop. It follows local grayscale intensity, modestly biases existing
+bind/signal activity, and decays when the input is removed. The isolated
+three-seed screen (`160103–160105`, 60 ticks per phase, 40 removal ticks)
+reported unseen closed-outline trace `0.1339` versus `0` for the blank control;
+after removal it fell to `0.0102`. This confirms causal local response and
+forgetting, not useful image interpretation. Mean unseen bonds were `64` in the
+guided arm versus `76.33` blank, and strong facets were zero in both, so the
+mechanism must not yet be promoted as a morphology solution.
+
+The next Package B pass is a preregistered fixed suite of shifted, brightness-
+scaled, noisy, shuffled, and image-removed examples, with a simple raw-pixel
+baseline and topology/activity descriptors. The promotion question is whether
+the collective response predicts unseen variations and retains useful signal
+after removal without prescribed shapes.
