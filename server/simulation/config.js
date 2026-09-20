@@ -156,7 +156,7 @@ export const BASE_CONFIG = {
       memberSupportPerTick: 8,
       bondReservePerTick: 0.12,
       repairWindowTicks: 12,
-      suppressMovement: true,
+      suppressMovement: false,
       preserveExistingBonds: true,
       populationCap: 48,
       connectionCap: 96
