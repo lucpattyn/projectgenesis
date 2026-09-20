@@ -2,6 +2,14 @@ import { clamp } from "./utils.js";
 
 export const GUIDED_INPUT_SIZE = 16;
 
+export function createDefaultSurvivalCueGrid(size = GUIDED_INPUT_SIZE) {
+  const center = (size - 1) / 2;
+  return Array.from({ length: size }, (_, y) => Array.from({ length: size }, (_, x) => {
+    const distance = Math.hypot(x - center, y - center);
+    return Number(clamp(1 - distance / (size * 0.72), 0.04, 1).toFixed(4));
+  }));
+}
+
 const BUILT_IN_PATTERNS = {
   "horizontal-boundary": (x, y, size) => y >= Math.floor(size / 2) ? 1 : 0,
   "vertical-boundary": (x, y, size) => x >= Math.floor(size / 2) ? 1 : 0,

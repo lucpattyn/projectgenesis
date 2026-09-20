@@ -7,7 +7,7 @@ import { DEFAULT_MUTATION_ENGINE } from "./mutation-engine.js";
 import { Organism } from "./organism.js";
 import { World } from "./world.js";
 import { average, clamp, createSeededRandom, normalizeSeed } from "./utils.js";
-import { createGuidedInput, setGuidedGrid, setGuidedPattern, serializeGuidedInput } from "./guided-input.js";
+import { createDefaultSurvivalCueGrid, createGuidedInput, setGuidedGrid, setGuidedPattern, serializeGuidedInput } from "./guided-input.js";
 
 const MAX_TELEMETRY_EVENTS = 1000;
 const MAX_PRIMARY_PRODUCTION_MARKERS = 90;
@@ -32,6 +32,11 @@ export class Simulation {
       pattern: this.config.guidedStructuralIntelligence?.pattern ?? "horizontal-boundary",
       enabled: this.config.guidedStructuralIntelligence?.enabled ?? false
     });
+    this.guidedInput = setGuidedGrid(
+      this.guidedInput,
+      createDefaultSurvivalCueGrid(this.guidedInput.size),
+      "default-survival-cue"
+    );
     this.organisms = [];
     this.nextOrganismId = 1;
     this.isPaused = false;
@@ -308,6 +313,9 @@ export class Simulation {
       if (result.consumedEnergy > 0 && organism.alive) {
         this.recordTetheredScoutValue(organism, result.consumedEnergy);
         this.emitCollectivePulse(organism, "food", Math.min(1, result.consumedEnergy / 10), { x: organism.x, y: organism.y });
+        if ((organism.guidedInputSignal ?? 0) >= 0.35) {
+          this.emitCollectivePulse(organism, "guided-return", Math.min(1, organism.guidedInputSignal), { x: organism.x, y: organism.y });
+        }
         const priorityMemberIds = this.getGateFieldEnergyPriority(organism, result.consumedFoodOrigin);
         const surplusFirst = this.config.bond.surplusFirstEnergy?.enabled !== false;
         const bondAllocation = surplusFirst
@@ -758,7 +766,7 @@ export class Simulation {
   recordGuidedSupportReward(event, strength) {
     const mode = this.config.guidedStructuralIntelligence?.supportedDevelopment;
     if (!mode?.enabled || mode.unconditionalSupportEnabled) return;
-    const rewardedEvents = new Set(["food", "gate", "migration", "reproduction", "scout-return", "member-support"]);
+    const rewardedEvents = new Set(["food", "guided-return", "gate", "migration", "reproduction", "scout-return", "member-support"]);
     if (!rewardedEvents.has(event)) return;
     const reward = Math.max(0, Number(strength) || 0) * Number(mode.supportCreditPerPulse ?? 0);
     this.guidedSupportCredits = Math.min(Number(mode.maximumSupportCredits ?? 48), this.guidedSupportCredits + reward);

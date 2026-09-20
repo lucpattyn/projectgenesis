@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createGuidedInput, sampleGuidedInput, setGuidedGrid, setGuidedPattern } from "../server/simulation/guided-input.js";
+import { createDefaultSurvivalCueGrid, createGuidedInput, sampleGuidedInput, setGuidedGrid, setGuidedPattern } from "../server/simulation/guided-input.js";
 
 const horizontal = createGuidedInput({ pattern: "horizontal-boundary", enabled: true });
 assert.equal(horizontal.size, 16);
@@ -22,5 +22,7 @@ const direct = { ...setGuidedGrid(horizontal, Array.from({ length: 16 }, (_, y) 
 assert.equal(sampleGuidedInput(direct, 8, 3, 64, 64, 0), 1);
 assert.equal(sampleGuidedInput(direct, 3, 3, 64, 64, 0), 0);
 assert.equal(sampleGuidedInput({ ...direct, enabled: false }, 8, 3, 64, 64, 0), 0);
+const survivalCue = createDefaultSurvivalCueGrid();
+assert.ok(survivalCue[8][8] > survivalCue[0][0]);
 
 console.log("Guided input checks passed");
