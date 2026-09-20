@@ -283,7 +283,7 @@ export class Organism {
     if (canMove) {
       this.x = target.x;
       this.y = target.y;
-    } else if (!coupled) {
+    } else if (!coupled && movementAllowed) {
       this.energy -= config.idleCost;
       energyFlow.expenses.idle += config.idleCost;
     }
