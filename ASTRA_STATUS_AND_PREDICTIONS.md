@@ -142,3 +142,26 @@ Do not enable the mechanism by default in live Genesis until all are true:
 4. How should Prime-31 expose per-neighbor state without hardcoding roles?
 5. What evidence would justify moving from isolated benchmarks to live ecology?
 
+## Guided Structural Intelligence direction (Package A, 2026-09-20)
+
+Astra's new direction is now represented by `GUIDED_STRUCTURAL_INTELLIGENCE.md`.
+Package A is implemented as a deliberately opt-in layer on this branch:
+
+- bounded 16×16 grayscale input with horizontal-boundary, vertical-boundary,
+  closed-outline, blank, and browser upload/downsampling;
+- local-only sensing mapped onto the existing Prime-17 neighborhood pathway;
+- live preview plus enabled/source/revision/local-signal diagnostics;
+- visibly labeled supported-development mode with a finite per-tick budget,
+  member-first support, bond-reserve support, and a bounded quiet-bond repair
+  window;
+- no new prime, no shape whitelist, no global image/class label, and no change
+  to baseline behavior while disabled.
+
+Verification: `npm test` passes the spatial-bond regression and new guided-input
+checks. The server smoke test confirmed disabled-by-default state and successful
+pattern switching through `/api/guided-input` without an automatic world reset.
+
+This is infrastructure, not evidence of image understanding. The next package
+must measure whether an input changes topology/activity and whether any useful
+response survives removal of the input. Blank, shuffled, raw-pixel, altered
+position/brightness/noise, and image-removal controls are mandatory.

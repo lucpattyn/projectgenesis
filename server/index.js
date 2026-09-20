@@ -183,6 +183,14 @@ async function handleApi(request, response, url) {
       simulation.setCollectiveMemoryEnabled(body.collectiveMemoryEnabled);
     }
 
+    if (body.guidedStructuralIntelligenceEnabled !== undefined) {
+      simulation.setGuidedStructuralIntelligenceEnabled(body.guidedStructuralIntelligenceEnabled);
+    }
+
+    if (body.guidedSupportedDevelopmentEnabled !== undefined) {
+      simulation.setGuidedSupportedDevelopmentEnabled(body.guidedSupportedDevelopmentEnabled);
+    }
+
     if (body.courierEnabled !== undefined) {
       simulation.setCourierEnabled(body.courierEnabled);
     }
@@ -218,6 +226,19 @@ async function handleApi(request, response, url) {
     }
 
     sendJson(response, 200, simulation.getSnapshot());
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/guided-input") {
+    const body = await readRequestBody(request);
+    try {
+      if (body.pattern) simulation.setGuidedPattern(body.pattern);
+      if (body.grid) simulation.setGuidedGrid(body.grid, body.source ?? "uploaded");
+      if (body.enabled !== undefined) simulation.setGuidedStructuralIntelligenceEnabled(body.enabled);
+      sendJson(response, 200, simulation.getSnapshot());
+    } catch (error) {
+      sendJson(response, 400, { error: error instanceof Error ? error.message : "Invalid guided input." });
+    }
     return true;
   }
 

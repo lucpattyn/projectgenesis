@@ -81,6 +81,22 @@ For headless screens, stop the live server first. Use seed `160103` as the quick
 
 ## Where we are
 
+### New direction: Guided Structural Intelligence — Package A complete
+
+`GUIDED_STRUCTURAL_INTELLIGENCE.md` is now the authoritative design boundary.
+The first package is implemented and switchable: 16×16 local grayscale input,
+built-in patterns and upload/downsampling, live preview/diagnostics, and a
+finite supported-development budget with a bounded quiet-bond repair window.
+The layer is disabled by default so all prior ecology and memory benchmarks
+remain valid controls. `npm test` passes both the spatial-bond regression and
+guided-input checks.
+
+Next session should begin Package B: hold a fixed small suite of image
+variations, measure input-dependent topology/activity, remove the image and
+test retained response, then compare blank/shuffled/raw-pixel controls. Do not
+claim representation until unseen variations are predicted above those
+controls.
+
 Phase 16 moved from energy accounting into **energy logistics**: whether strong bonded facets can locate, solve, and benefit from finite computational opportunities.
 
 The project now has evidence that gate-directed structural navigation works. Strong closed facets can reach gates, coordinate, create physical local food, and form larger bonded compounds. We do **not** yet have evidence for a persistent, self-funding ecosystem of independent productive structures.

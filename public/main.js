@@ -48,6 +48,12 @@ const courierEnabledInput = document.getElementById("courier-enabled");
 const facetTrailEnabledInput = document.getElementById("facet-trail-enabled");
 const environmentMemoryEnabledInput = document.getElementById("environment-memory-enabled");
 const energyEconomicsPanel = document.getElementById("energy-economics-panel");
+const guidedInputEnabledInput = document.getElementById("guided-input-enabled");
+const guidedSupportEnabledInput = document.getElementById("guided-support-enabled");
+const guidedPatternInput = document.getElementById("guided-pattern");
+const guidedImageUploadInput = document.getElementById("guided-image-upload");
+const guidedInputPreview = document.getElementById("guided-input-preview");
+const guidedInputNote = document.getElementById("guided-input-note");
 
 const renderer = new Renderer(canvas);
 let currentSnapshot = null;
@@ -91,6 +97,24 @@ function renderStats(statistics) {
     wrapper.append(dt, dd);
     statsGrid.appendChild(wrapper);
   }
+}
+
+function renderGuidedInput(input = {}) {
+  if (!guidedInputPreview) return;
+  const context = guidedInputPreview.getContext("2d");
+  const size = input.size ?? 16;
+  const cell = guidedInputPreview.width / size;
+  context.clearRect(0, 0, guidedInputPreview.width, guidedInputPreview.height);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const value = input.grid?.[y]?.[x] ?? 0;
+      context.fillStyle = `rgb(${Math.round(value * 255)},${Math.round(value * 255)},${Math.round(value * 255)})`;
+      context.fillRect(x * cell, y * cell, cell + 0.2, cell + 0.2);
+    }
+  }
+  context.strokeStyle = "rgba(117, 234, 255, 0.55)";
+  context.strokeRect(0.5, 0.5, guidedInputPreview.width - 1, guidedInputPreview.height - 1);
+  guidedInputNote.textContent = `Pattern ${input.pattern ?? "blank"} · ${input.source ?? "built-in"} · revision ${input.revision ?? 0} · ${input.enabled ? "active local sensing" : "disabled"}`;
 }
 
 function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}, refinery = {}, collectiveWork = {}, courier = {}, environmentMemory = {}, energeticEconomics = {}) {
@@ -336,6 +360,11 @@ function syncControls(snapshot) {
   statusPill.textContent = snapshot.controls.paused ? "Paused" : "Running";
   tickCounter.textContent = `Tick ${snapshot.statistics.tick ?? 0}`;
   canvasTickCounter.textContent = `Tick ${snapshot.statistics.tick ?? 0}`;
+  const guided = snapshot.guidedStructuralIntelligence ?? {};
+  guidedInputEnabledInput.checked = Boolean(guided.enabled);
+  guidedSupportEnabledInput.checked = Boolean(guided.supportedDevelopment?.enabled);
+  guidedPatternInput.value = ["horizontal-boundary", "vertical-boundary", "closed-outline", "blank"].includes(guided.pattern) ? guided.pattern : "horizontal-boundary";
+  renderGuidedInput(guided);
   const resources = snapshot.ecology.resources ?? {};
   const resourceSummary = `Resources G:${resources.GREEN ?? 0} B:${resources.BLUE ?? 0} R:${resources.RED ?? 0}`;
   const fertilitySummary = snapshot.ecology.localFertility
@@ -489,6 +518,27 @@ fireDurationInput.addEventListener("change", () => postJson("/api/settings", { f
 courierEnabledInput.addEventListener("change", () => postJson("/api/settings", { courierEnabled: courierEnabledInput.checked }));
 facetTrailEnabledInput.addEventListener("change", () => postJson("/api/settings", { facetTrailEnabled: facetTrailEnabledInput.checked }));
 environmentMemoryEnabledInput.addEventListener("change", () => postJson("/api/settings", { environmentMemoryVisualizationEnabled: environmentMemoryEnabledInput.checked }));
+guidedInputEnabledInput.addEventListener("change", () => postJson("/api/settings", { guidedStructuralIntelligenceEnabled: guidedInputEnabledInput.checked }));
+guidedSupportEnabledInput.addEventListener("change", () => postJson("/api/settings", { guidedSupportedDevelopmentEnabled: guidedSupportEnabledInput.checked }));
+guidedPatternInput.addEventListener("change", () => postJson("/api/guided-input", { pattern: guidedPatternInput.value }));
+guidedImageUploadInput.addEventListener("change", () => {
+  const file = guidedImageUploadInput.files?.[0];
+  if (!file) return;
+  const image = new Image();
+  image.onload = () => {
+    const scratch = document.createElement("canvas");
+    scratch.width = 16; scratch.height = 16;
+    const context = scratch.getContext("2d", { willReadFrequently: true });
+    context.drawImage(image, 0, 0, 16, 16);
+    const pixels = context.getImageData(0, 0, 16, 16).data;
+    const grid = Array.from({ length: 16 }, (_, y) => Array.from({ length: 16 }, (_, x) => {
+      const offset = (y * 16 + x) * 4;
+      return Number(((pixels[offset] * 0.299 + pixels[offset + 1] * 0.587 + pixels[offset + 2] * 0.114) / 255).toFixed(4));
+    }));
+    postJson("/api/guided-input", { grid, source: file.name });
+  };
+  image.src = URL.createObjectURL(file);
+});
 fireIgnitionInput.addEventListener("input", () => { fireIgnitionValue.textContent = Number(fireIgnitionInput.value).toFixed(3); });
 fireSpreadInput.addEventListener("input", () => { fireSpreadValue.textContent = Number(fireSpreadInput.value).toFixed(2); });
 fireDurationInput.addEventListener("input", () => { fireDurationValue.textContent = fireDurationInput.value; });

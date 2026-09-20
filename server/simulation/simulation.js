@@ -7,6 +7,7 @@ import { DEFAULT_MUTATION_ENGINE } from "./mutation-engine.js";
 import { Organism } from "./organism.js";
 import { World } from "./world.js";
 import { average, clamp, createSeededRandom, normalizeSeed } from "./utils.js";
+import { createGuidedInput, setGuidedGrid, setGuidedPattern, serializeGuidedInput } from "./guided-input.js";
 
 const MAX_TELEMETRY_EVENTS = 1000;
 const MAX_PRIMARY_PRODUCTION_MARKERS = 90;
@@ -26,6 +27,11 @@ export class Simulation {
     this.seed = normalizeSeed(this.config.universe.initialSeed);
     this.random = createSeededRandom(this.seed);
     this.world = new World(this.config.world, this.random);
+    this.guidedInput = createGuidedInput({
+      size: this.config.guidedStructuralIntelligence?.gridSize ?? 16,
+      pattern: this.config.guidedStructuralIntelligence?.pattern ?? "horizontal-boundary",
+      enabled: this.config.guidedStructuralIntelligence?.enabled ?? false
+    });
     this.organisms = [];
     this.nextOrganismId = 1;
     this.isPaused = false;
@@ -167,6 +173,7 @@ export class Simulation {
     this.bondRelayEnergyWithdrawn = 0;
     this.bondRelayEnergyDelivered = 0;
     this.bondRelayRescues = 0;
+    this.guidedSupportStats = { budgetSpent: 0, memberSupport: 0, bondReserveSupport: 0, quietBondTicks: 0 };
     this.resetEnergyEconomics();
     this.resetEnergyLogistics();
     this.initializeWorkGates();
@@ -239,6 +246,7 @@ export class Simulation {
     this.organisms.forEach((organism) => { organism.collectiveStrideActive = false; });
     this.organisms.forEach((organism) => { organism.collectiveTransportActive = false; });
     this.organisms.forEach((organism) => { organism.satietyMigrationActive = false; });
+    this.applyGuidedDevelopmentSupport();
     this.decayCourierKnowledge();
     this.world.updateFire({ ...this.config.hazards, chemistryEnabled: this.config.chemistry.enabled });
     this.world.updateChemistry(this.config.chemistry, this.config.ecology, this.config.environment);
@@ -272,6 +280,8 @@ export class Simulation {
         ecologyConfig: this.config.ecology,
         signalConfig: this.config.signal,
         environmentMemoryConfig: this.config.environmentMemory,
+        guidedInput: this.guidedInput,
+        guidedInputConfig: this.config.guidedStructuralIntelligence ?? {},
         coupled: coupledIds.has(organism.id),
         collectiveStrideMultiplier: migrationTransportEligibleIds.has(organism.id)
           ? this.config.collectiveWork.migrationTransport.movementCostMultiplier
@@ -1747,6 +1757,7 @@ export class Simulation {
     this.bondRelayEnergyWithdrawn = 0;
     this.bondRelayEnergyDelivered = 0;
     this.bondRelayRescues = 0;
+    this.guidedSupportStats = { budgetSpent: 0, memberSupport: 0, bondReserveSupport: 0, quietBondTicks: 0 };
     this.initializeWorkGates();
     this.snapshotVersion += 1;
     this.seedInitialPopulation(this.config.organism.initialPopulation);
@@ -4181,6 +4192,13 @@ export class Simulation {
           : !first || !second ? "member was removed" : "members separated";
         this.recordBondBreak(bond, reason, deadMember ? `member died: ${deadMember.deathReason ?? "unknown cause"}` : reason);
       } else if (!this.bondCandidates.has(key)) {
+        const support = this.config.guidedStructuralIntelligence?.supportedDevelopment;
+        if (support?.enabled && (bond.quietTicks ?? 0) < support.repairWindowTicks
+          && this.areAdjacent(first, second) && (bond.reserve ?? 0) > 0) {
+          bond.quietTicks = (bond.quietTicks ?? 0) + 1;
+          this.guidedSupportStats.quietBondTicks += 1;
+          continue;
+        }
         bond.strength = Math.max(0, bond.strength - 0.015);
         if (bond.strength === 0) {
           this.bonds.delete(key);
@@ -4236,6 +4254,46 @@ export class Simulation {
 
   setCollectiveMemoryEnabled(enabled) {
     this.config.bond.collectiveMemory.enabled = Boolean(enabled);
+  }
+
+  setGuidedStructuralIntelligenceEnabled(enabled) {
+    this.guidedInput.enabled = Boolean(enabled);
+    this.config.guidedStructuralIntelligence.enabled = this.guidedInput.enabled;
+  }
+
+  setGuidedSupportedDevelopmentEnabled(enabled) {
+    this.config.guidedStructuralIntelligence.supportedDevelopment.enabled = Boolean(enabled);
+  }
+
+  setGuidedPattern(pattern) {
+    this.guidedInput = setGuidedPattern(this.guidedInput, pattern);
+  }
+
+  setGuidedGrid(grid, source = "uploaded") {
+    this.guidedInput = setGuidedGrid(this.guidedInput, grid, source);
+  }
+
+  applyGuidedDevelopmentSupport() {
+    const mode = this.config.guidedStructuralIntelligence?.supportedDevelopment;
+    if (!this.guidedInput.enabled || !mode?.enabled || mode.maintenanceBudgetPerTick <= 0) return;
+    let budget = mode.maintenanceBudgetPerTick;
+    const living = this.organisms.filter((organism) => organism.alive);
+    for (const organism of living.filter((item) => item.energy < this.config.bond.supportThreshold).sort((a, b) => a.energy - b.energy)) {
+      if (budget <= 0) break;
+      const amount = Math.min(budget, mode.memberSupportPerTick, this.config.bond.supportThreshold - organism.energy);
+      organism.energy += amount;
+      budget -= amount;
+      this.guidedSupportStats.memberSupport += amount;
+    }
+    for (const bond of this.bonds.values()) {
+      if (budget <= 0) break;
+      const amount = Math.min(budget, mode.bondReservePerTick, Math.max(0, this.config.bond.reserveCapacity - (bond.reserve ?? 0)));
+      if (amount <= 0) continue;
+      bond.reserve = (bond.reserve ?? 0) + amount;
+      budget -= amount;
+      this.guidedSupportStats.bondReserveSupport += amount;
+    }
+    this.guidedSupportStats.budgetSpent += mode.maintenanceBudgetPerTick - budget;
   }
 
   setCourierEnabled(enabled) {
@@ -4342,6 +4400,15 @@ export class Simulation {
         worldNumber: this.worldNumber,
         founderGenome: this.config.organism.founderGenome,
         founderGenomeDecimal: this.genomeEngine.construct(this.config.organism.founderGenome).number
+      },
+      guidedStructuralIntelligence: {
+        ...serializeGuidedInput(this.guidedInput),
+        localRadius: this.config.guidedStructuralIntelligence?.localRadius ?? 1,
+        sensoryGain: this.config.guidedStructuralIntelligence?.sensoryGain ?? 1,
+        supportedDevelopment: {
+          ...this.config.guidedStructuralIntelligence?.supportedDevelopment,
+          ...this.guidedSupportStats
+        }
       },
       ecology: {
         foodTargetDensity: this.config.world.foodTargetDensity,

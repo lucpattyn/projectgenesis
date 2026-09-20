@@ -135,6 +135,21 @@ export const BASE_CONFIG = {
     coverageThreshold: 0.05,
     regionThreshold: 0.12
   },
+  guidedStructuralIntelligence: {
+    // Package A: explicitly supported, local image input. Disabled so the
+    // historical ecology remains a direct regression control.
+    enabled: false,
+    gridSize: 16,
+    localRadius: 1,
+    sensoryGain: 1.5,
+    supportedDevelopment: {
+      enabled: false,
+      maintenanceBudgetPerTick: 2,
+      memberSupportPerTick: 0.12,
+      bondReservePerTick: 0.08,
+      repairWindowTicks: 12
+    }
+  },
   energeticEconomics: {
     // Observation only: these intervals never alter organism behavior or world physics.
     intervalTicks: 100,

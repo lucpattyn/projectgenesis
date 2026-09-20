@@ -1,5 +1,6 @@
 import { DEFAULT_CONFIG, DIRECTIONS, RESOURCE_TYPES, TILE_TYPES } from "./config.js";
 import { clamp, hueToColor, randomChoice } from "./utils.js";
+import { sampleGuidedInput } from "./guided-input.js";
 
 function resourceYield(resource, strengths) {
   const digestion = strengths[5] ?? 0;
@@ -110,7 +111,7 @@ export class Organism {
     return Number.isFinite(value) ? clamp(value, 0, 1.8) : null;
   }
 
-  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, environmentMemoryConfig, brainExecutor, coupled, collectiveStrideMultiplier = 1, deferOrdinaryHarvest = false, harvestRestraint = null, neighborStates = [], structuralFocus = null, collectiveWorkCue = 0, collectiveWorkFields = [], courierTarget = null, memoryDirectionScores = null }) {
+  act({ world, occupiedKeys, config, ecologyConfig, signalConfig, environmentMemoryConfig, guidedInput = null, guidedInputConfig = {}, brainExecutor, coupled, collectiveStrideMultiplier = 1, deferOrdinaryHarvest = false, harvestRestraint = null, neighborStates = [], structuralFocus = null, collectiveWorkCue = 0, collectiveWorkFields = [], courierTarget = null, memoryDirectionScores = null }) {
     let consumedEnergy = 0;
     let consumedResource = null;
     const energyFlow = { income: { food: 0, gateWork: 0 }, expenses: { movement: 0, maintenance: 0, perception: 0, bonds: 0, bondReserveMaintenance: 0, gateWork: 0, memory: 0, signals: 0, idle: 0 }, losses: { capacityOverflow: 0, deathStoredEnergy: 0 } };
@@ -138,6 +139,8 @@ export class Organism {
       ["nw", -1, -1], ["n", 0, -1], ["ne", 1, -1], ["w", -1, 0],
       ["e", 1, 0], ["sw", -1, 1], ["s", 0, 1], ["se", 1, 1]
     ];
+    const guidedSignal = sampleGuidedInput(guidedInput, this.x, this.y, world.width, world.height, guidedInputConfig.localRadius ?? 0);
+    this.guidedInputSignal = Number(guidedSignal.toFixed(3));
     const tileSignal = (x, y) => {
       const tile = world.getTile(x, y);
       let courierOpportunity = 0;
@@ -165,12 +168,14 @@ export class Organism {
           return distance <= field.radius ? field.strength * (1 - distance / (field.radius + 1)) * 1.25 : 0;
         }));
       }
+      const localImage = sampleGuidedInput(guidedInput, x, y, world.width, world.height, 0)
+        * (guidedInputConfig.sensoryGain ?? 1);
       if (tile.type === TILE_TYPES.FOOD) {
         if (structuralFocus === "catalyst" && tile.resource === RESOURCE_TYPES.RED) return 1.8;
-        return courierOpportunity + fieldOpportunity + resourceYield(tile.resource, this.genomeProfile.powers);
+        return Math.max(courierOpportunity + fieldOpportunity + resourceYield(tile.resource, this.genomeProfile.powers), localImage);
       }
       if (structuralFocus === "material") return courierOpportunity + fieldOpportunity + Math.min(1.8, world.materialAt(x, y) * 1.8);
-      return courierOpportunity + fieldOpportunity;
+      return Math.max(courierOpportunity + fieldOpportunity, localImage);
     };
     this.perception = this.genomeProfile.traits.canSenseNeighborhood
       ? Object.fromEntries(neighborhoodDirections.map(([id, dx, dy]) => [id, tileSignal(this.x + dx, this.y + dy)]))
@@ -380,6 +385,7 @@ export class Organism {
       lastConsumedResource: this.lastConsumedResource,
       signalOutput: Number((this.brainExecution?.effectors.signal ?? 0).toFixed(2)),
       movementDecision: this.movementDecision,
+      guidedInputSignal: this.guidedInputSignal ?? 0,
       nodeTrace: Number(this.nodeTrace.toFixed(3)),
       lastPulseTick: this.lastPulseTick,
       memoryEvent: this.memoryEvent,

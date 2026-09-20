@@ -33,6 +33,26 @@
           </div>
         </section>
 
+        <section class="panel-block guided-input-block">
+          <p class="eyebrow">Package A · Guided substrate</p>
+          <h2>Local image input</h2>
+          <p class="ecology-note">A bounded 16×16 grayscale field. Organisms receive only the local cell/neighborhood value; the full image is not sent to any organism.</p>
+          <label class="checkbox-label"><input id="guided-input-enabled" type="checkbox" /> <span>Enable guided input</span></label>
+          <label class="checkbox-label"><input id="guided-support-enabled" type="checkbox" /> <span>Supported development mode</span></label>
+          <label>
+            <span>Built-in pattern</span>
+            <select id="guided-pattern">
+              <option value="horizontal-boundary">Horizontal boundary</option>
+              <option value="vertical-boundary">Vertical boundary</option>
+              <option value="closed-outline">Closed outline</option>
+              <option value="blank">Blank</option>
+            </select>
+          </label>
+          <label><span>Upload image</span><input id="guided-image-upload" type="file" accept="image/*" /></label>
+          <canvas id="guided-input-preview" width="160" height="160" aria-label="Guided input preview"></canvas>
+          <p class="ecology-note" id="guided-input-note">Package A is disabled; baseline ecology is unchanged.</p>
+        </section>
+
         <section class="panel-block sidebar-brain">
           <p class="eyebrow">Live Generated Graph</p>
           <h2 id="live-brain-title">Selected Organism Brain</h2>
