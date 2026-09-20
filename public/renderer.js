@@ -370,6 +370,15 @@ export class Renderer {
         this.context.setLineDash([]);
       }
 
+      if (snapshot.guidedStructuralIntelligence?.enabled && (organism.guidedResponseTrace ?? 0) > 0.01) {
+        const trace = Math.min(1, organism.guidedResponseTrace);
+        this.context.strokeStyle = `rgba(117, 234, 255, ${0.2 + trace * 0.75})`;
+        this.context.lineWidth = Math.max(1, cellSize * 0.08);
+        this.context.beginPath();
+        this.context.arc(centerX, centerY, radius + Math.max(2, cellSize * (0.16 + trace * 0.4)), 0, Math.PI * 2);
+        this.context.stroke();
+      }
+
       if (organism.energy >= 90) {
         this.context.strokeStyle = "rgba(255, 244, 163, 0.9)";
         this.context.lineWidth = Math.max(1, cellSize * 0.08);

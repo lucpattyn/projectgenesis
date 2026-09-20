@@ -114,7 +114,7 @@ function renderGuidedInput(input = {}) {
   }
   context.strokeStyle = "rgba(117, 234, 255, 0.55)";
   context.strokeRect(0.5, 0.5, guidedInputPreview.width - 1, guidedInputPreview.height - 1);
-  guidedInputNote.textContent = `Pattern ${input.pattern ?? "blank"} · ${input.source ?? "built-in"} · revision ${input.revision ?? 0} · ${input.enabled ? "active local sensing" : "disabled"}`;
+  guidedInputNote.textContent = `Pattern ${input.pattern ?? "blank"} · ${input.source ?? "built-in"} · revision ${input.revision ?? 0} · ${input.enabled ? "active local sensing" : "disabled"} · mean trace ${(input.adaptiveResponse?.meanTrace ?? 0).toFixed(3)} · active traces ${input.adaptiveResponse?.activeTraces ?? 0}`;
 }
 
 function renderTelemetry(telemetry, distributedState = {}, facetCapital = {}, refinery = {}, collectiveWork = {}, courier = {}, environmentMemory = {}, energeticEconomics = {}) {
@@ -261,6 +261,7 @@ function renderGenomeInspector(snapshot) {
     <p class="selected-organism">Organism #${organism.id}, generation ${organism.generation}</p>
     <p class="genome-expression">${organism.genomeExpression}</p>
     <p>Energy ${organism.energy} | Age ${organism.age}</p>
+    <p>Guided input ${organism.guidedInputSignal ?? 0} | Response trace ${organism.guidedResponseTrace ?? 0}</p>
     <p>${persistentState}</p>
     <p>${sharedStateDescription}</p>
     <p>${organism.mutation ? `Birth mutation: ${organism.mutation.description}` : "Birth mutation: inherited unchanged."}</p>
