@@ -4092,9 +4092,20 @@ export class Simulation {
           existingBond.strength = Math.min(1, existingBond.strength + this.config.bond.repairPerTick);
         }
       } else if (ticks >= this.config.bond.buddingCandidateTicks
-        && this.bonds.size < (this.config.guidedStructuralIntelligence?.supportedDevelopment?.enabled
-          ? this.config.guidedStructuralIntelligence.supportedDevelopment.connectionCap
-          : Infinity)) {
+        && (() => {
+          const support = this.config.guidedStructuralIntelligence?.supportedDevelopment;
+          if (!support?.enabled) return true;
+          if (this.bonds.size >= support.connectionCap) return false;
+          const groups = this.getBondGroups();
+          const componentFor = (id) => groups.find((members) => members.includes(id)) ?? [id];
+          const componentBondCount = (members) => {
+            const ids = new Set(members);
+            return [...this.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId)).length;
+          };
+          const firstCount = componentBondCount(componentFor(first.id));
+          const secondCount = componentBondCount(componentFor(second.id));
+          return firstCount < support.connectionCapPerComponent && secondCount < support.connectionCapPerComponent;
+        })()) {
         const seedEnergy = this.structuralBirthSeeds.get(key) ?? 0;
         this.bonds.set(key, {
           firstId: first.id,

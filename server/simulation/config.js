@@ -159,7 +159,8 @@ export const BASE_CONFIG = {
       suppressMovement: false,
       preserveExistingBonds: true,
       populationCap: 48,
-      connectionCap: 96
+      connectionCap: 96,
+      connectionCapPerComponent: 48
     }
   },
   energeticEconomics: {
