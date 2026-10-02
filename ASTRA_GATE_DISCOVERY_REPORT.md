@@ -80,3 +80,9 @@ The visual server exposes the guided input and support controls at `http://local
 ## Recommended next implementation
 
 Implement local `gate-sighting` records and TTL decay first, then add quorum-based gate assignment. Keep ordinary ecology defaults unchanged, retain the unconditional support override as a disabled comparison control, and measure gate arrivals, consensus completions, support-credit inflow/outflow, bond lifetime, and component migration distance.
+
+## Implementation update (2026-10-02)
+
+The local gate-discovery layer is now implemented and enabled by default under `collectiveWork.gateDiscovery.enabled`. Organisms detect nearby non-exhausted gates, exchange attenuated reports across bonds for bounded hops, and components select a target after a minimum report quorum. Reports include a gate signature, relative vector, phase, stock, confidence, and TTL. Discovery is observable through `collectiveWork.gateDiscovery` in the API snapshot and can be disabled without removing the earlier gate-navigation/consensus system.
+
+A live smoke check after server restart reported gate sightings and multiple discovery consensuses, confirming that the protocol is active. This is an instrumentation/behavior check, not yet a long-horizon survival claim.

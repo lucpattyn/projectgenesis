@@ -102,6 +102,8 @@ Implement the local protocol from `ASTRA_GATE_DISCOVERY_REPORT.md`:
 
 No global gate map should be passed to organisms.
 
+Current status: implemented in `ac3468f` and enabled by default as `collectiveWork.gateDiscovery`. It remains independently switchable for matched controls. The API exposes sightings, relays, consensuses, active reports, and active component targets.
+
 ### 8. Structural maintenance policy
 
 Start with a designed local policy, not evolution:
