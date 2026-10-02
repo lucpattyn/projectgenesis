@@ -13,6 +13,9 @@ export class ReincarnationController {
     this.lastResult = null;
     this.nextReason = "initial world";
     this.carriedComponentSize = 0;
+    this.carriedBondCount = 0;
+    this.carriedFacetCount = 0;
+    this.lastCarry = null;
   }
 
   recipes() {
@@ -72,25 +75,35 @@ export class ReincarnationController {
   captureComponent(simulation) {
     const groups = simulation.getBondGroups().filter((group) => group.length > 3);
     if (!groups.length) return null;
-    const group = groups.sort((a, b) => b.length - a.length)[0];
+    const groupScore = (group) => {
+      const ids = new Set(group);
+      const bonds = [...simulation.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId)).length;
+      const facets = simulation.getFacets().filter((facet) => facet.memberIds.every((id) => ids.has(id))).length;
+      return group.length + bonds * 0.75 + facets * 2;
+    };
+    const group = groups.sort((a, b) => groupScore(b) - groupScore(a))[0];
     const ids = new Set(group);
     const members = group
       .map((id) => simulation.organisms.find((organism) => organism.id === id))
       .filter((organism) => organism?.alive);
     if (members.length < 4) return null;
     const origin = members[0];
+    const internalBonds = [...simulation.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId));
+    const internalFacets = simulation.getFacets().filter((facet) => facet.memberIds.every((id) => ids.has(id)));
     return {
       members,
       positions: members.map((member) => ({ id: member.id, dx: member.x - origin.x, dy: member.y - origin.y })),
-      bonds: [...simulation.bonds.values()]
-        .filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId))
-        .map((bond) => ({ ...bond }))
+      bonds: internalBonds.map((bond) => ({ ...bond })),
+      facetCount: internalFacets.length
     };
   }
 
   restoreComponent(simulation, carried) {
     if (!carried) {
       this.carriedComponentSize = 0;
+      this.carriedBondCount = 0;
+      this.carriedFacetCount = 0;
+      this.lastCarry = null;
       return;
     }
     const occupied = new Set(simulation.organisms.map((organism) => `${organism.x},${organism.y}`));
@@ -104,6 +117,9 @@ export class ReincarnationController {
     }
     if (!anchor) {
       this.carriedComponentSize = 0;
+      this.carriedBondCount = 0;
+      this.carriedFacetCount = 0;
+      this.lastCarry = null;
       return;
     }
     const idMap = new Map();
@@ -143,6 +159,14 @@ export class ReincarnationController {
     simulation.nextOrganismId = nextId;
     simulation.bondGroupsCache = null;
     this.carriedComponentSize = carried.members.length;
+    this.carriedBondCount = carried.bonds.length;
+    this.carriedFacetCount = carried.facetCount ?? 0;
+    this.lastCarry = {
+      members: this.carriedComponentSize,
+      bonds: this.carriedBondCount,
+      facets: this.carriedFacetCount,
+      reserveTransitionLoss: 0.1
+    };
   }
 
   applyRecipe(simulation, recipe, carried = null) {
@@ -224,6 +248,9 @@ export class ReincarnationController {
       nextReason: this.nextReason,
       lastResult: this.lastResult,
       carriedComponentSize: this.carriedComponentSize,
+      carriedBondCount: this.carriedBondCount,
+      carriedFacetCount: this.carriedFacetCount,
+      lastCarry: this.lastCarry,
       history: this.history.slice(-this.maximumHistory)
     };
   }
