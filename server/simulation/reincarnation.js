@@ -101,34 +101,47 @@ export class ReincarnationController {
       this.lastCarry = null;
       return;
     }
-    // Remove the freshly seeded organisms: this is a continuation, not a new
-    // population with a decorative component pasted into it.
-    simulation.organisms = [];
-    simulation.bonds.clear();
-    simulation.componentReserves.clear();
-    simulation.lineageBirthTicks.clear();
-    let nextId = 1;
+    // Keep the freshly seeded population as the new world's newcomers. Add the
+    // carried organisms alongside it, remapping only IDs that could collide;
+    // their positions and topology remain unchanged on the canvas.
+    let nextId = Math.max(0, ...simulation.organisms.map((organism) => organism.id)) + 1;
+    const idMap = new Map();
     for (const member of carried.members) {
-      nextId = Math.max(nextId, member.id + 1);
+      const oldId = member.id;
+      const newId = nextId;
+      nextId += 1;
+      idMap.set(oldId, newId);
+      member.id = newId;
       member.alive = true;
       member.energy = Math.max(1, Math.min(member.energy, simulation.config.organism.startingEnergy * 1.25));
       member.age = Math.min(member.age, Math.floor(simulation.config.organism.maxAge * 0.5) || member.age);
       member.collectiveStrideActive = false;
       member.collectiveTransportActive = false;
       simulation.organisms.push(member);
-      if (member.lineageId !== undefined) simulation.lineageBirthTicks.set(member.lineageId, -member.age);
+      if (member.lineageId !== undefined && !simulation.lineageBirthTicks.has(member.lineageId)) {
+        simulation.lineageBirthTicks.set(member.lineageId, -member.age);
+      }
     }
     for (const bond of carried.bonds) {
+      const firstId = idMap.get(bond.firstId);
+      const secondId = idMap.get(bond.secondId);
+      if (firstId === undefined || secondId === undefined) continue;
       const carriedBond = {
         ...bond,
+        firstId,
+        secondId,
         reserve: Math.max(0, (bond.reserve ?? 0) * 0.9),
         dormant: Boolean(bond.dormant)
       };
-      simulation.bonds.set(simulation.bondKey(bond.firstId, bond.secondId), carriedBond);
+      simulation.bonds.set(simulation.bondKey(firstId, secondId), carriedBond);
     }
-    for (const [key, value] of carried.reserves ?? []) simulation.componentReserves.set(key, Math.max(0, value * 0.9));
-    simulation.births = simulation.organisms.length;
-    simulation.deaths = 0;
+    for (const [key, value] of carried.reserves ?? []) {
+      const remappedIds = key.split(":").map(Number).map((id) => idMap.get(id)).filter((id) => id !== undefined);
+      if (remappedIds.length) {
+        simulation.componentReserves.set(simulation.componentReserveKey(remappedIds), Math.max(0, value * 0.9));
+      }
+    }
+    simulation.births += carried.members.length;
     simulation.nextOrganismId = nextId;
     simulation.bondGroupsCache = null;
     this.carriedComponentSize = carried.members.length;
