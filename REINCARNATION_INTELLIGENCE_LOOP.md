@@ -29,7 +29,7 @@ Low-scoring cycles are explicitly marked as exploration. A high score is not a c
 
 ## Topology continuity
 
-At the boundary, the strongest connected component with at least four living members is carried into the next world. Its relative geometry, local controller state, traces, and bond reserves survive with a 10% reserve transition loss. New organisms and the environmental field are still seeded afresh around it. This creates a controlled continuity test: a morphology can encounter a new world, interact with new resources, and either adapt, consolidate, or fail.
+At the boundary, every surviving bonded structure with at least three members is carried into the next world (with a minimum of four total living members required for a meaningful carry). The organisms keep their identities, absolute canvas positions, topology, traces, and bond/component reserves, with a 10% reserve transition loss. Freshly seeded organisms are discarded when a carry exists: only the environmental field and recipe change. If no meaningful structure survives, the cycle starts from a fresh population. This creates a visible continuity test: the same morphologies encounter a new world, interact with new resources, and either adapt, consolidate, or fail.
 
 ## Live observability
 

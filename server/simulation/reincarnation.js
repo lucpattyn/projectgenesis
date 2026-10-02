@@ -73,28 +73,23 @@ export class ReincarnationController {
   }
 
   captureComponent(simulation) {
-    const groups = simulation.getBondGroups().filter((group) => group.length > 3);
+    const groups = simulation.getBondGroups().filter((group) => group.length >= 3);
     if (!groups.length) return null;
-    const groupScore = (group) => {
-      const ids = new Set(group);
-      const bonds = [...simulation.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId)).length;
-      const facets = simulation.getFacets().filter((facet) => facet.memberIds.every((id) => ids.has(id))).length;
-      return group.length + bonds * 0.75 + facets * 2;
-    };
-    const group = groups.sort((a, b) => groupScore(b) - groupScore(a))[0];
-    const ids = new Set(group);
-    const members = group
+    const ids = new Set(groups.flat());
+    const members = [...ids]
       .map((id) => simulation.organisms.find((organism) => organism.id === id))
       .filter((organism) => organism?.alive);
     if (members.length < 4) return null;
-    const origin = members[0];
     const internalBonds = [...simulation.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId));
     const internalFacets = simulation.getFacets().filter((facet) => facet.memberIds.every((id) => ids.has(id)));
     return {
       members,
-      positions: members.map((member) => ({ id: member.id, dx: member.x - origin.x, dy: member.y - origin.y })),
+      positions: members.map((member) => ({ id: member.id, x: member.x, y: member.y })),
       bonds: internalBonds.map((bond) => ({ ...bond })),
-      facetCount: internalFacets.length
+      facetCount: internalFacets.length,
+      reserves: [...simulation.componentReserves.entries()]
+        .filter(([key]) => [...ids].every((id) => key.split(":").includes(String(id))))
+        .map(([key, value]) => [key, value])
     };
   }
 
@@ -106,56 +101,34 @@ export class ReincarnationController {
       this.lastCarry = null;
       return;
     }
-    const occupied = new Set(simulation.organisms.map((organism) => `${organism.x},${organism.y}`));
-    const offsets = carried.positions;
-    let anchor = null;
-    for (let y = 4; y < simulation.world.height - 4 && !anchor; y += 1) {
-      for (let x = 4; x < simulation.world.width - 4 && !anchor; x += 1) {
-        const cells = offsets.map((offset) => simulation.world.wrapPosition(x + offset.dx, y + offset.dy));
-        if (cells.every((cell) => !occupied.has(`${cell.x},${cell.y}`))) anchor = { x, y };
-      }
-    }
-    if (!anchor) {
-      this.carriedComponentSize = 0;
-      this.carriedBondCount = 0;
-      this.carriedFacetCount = 0;
-      this.lastCarry = null;
-      return;
-    }
-    const idMap = new Map();
-    let nextId = Math.max(0, ...simulation.organisms.map((organism) => organism.id)) + 1;
+    // Remove the freshly seeded organisms: this is a continuation, not a new
+    // population with a decorative component pasted into it.
+    simulation.organisms = [];
+    simulation.bonds.clear();
+    simulation.componentReserves.clear();
+    simulation.lineageBirthTicks.clear();
+    let nextId = 1;
     for (const member of carried.members) {
-      const oldId = member.id;
-      const newId = nextId;
-      nextId += 1;
-      idMap.set(oldId, newId);
-      member.id = newId;
+      nextId = Math.max(nextId, member.id + 1);
       member.alive = true;
       member.energy = Math.max(1, Math.min(member.energy, simulation.config.organism.startingEnergy * 1.25));
       member.age = Math.min(member.age, Math.floor(simulation.config.organism.maxAge * 0.5) || member.age);
-      const offset = offsets.find((item) => item.id === oldId);
-      const cell = simulation.world.wrapPosition(anchor.x + offset.dx, anchor.y + offset.dy);
-      member.x = cell.x;
-      member.y = cell.y;
       member.collectiveStrideActive = false;
       member.collectiveTransportActive = false;
       simulation.organisms.push(member);
-      occupied.add(`${cell.x},${cell.y}`);
       if (member.lineageId !== undefined) simulation.lineageBirthTicks.set(member.lineageId, -member.age);
     }
     for (const bond of carried.bonds) {
-      const firstId = idMap.get(bond.firstId);
-      const secondId = idMap.get(bond.secondId);
-      if (firstId === undefined || secondId === undefined) continue;
       const carriedBond = {
         ...bond,
-        firstId,
-        secondId,
         reserve: Math.max(0, (bond.reserve ?? 0) * 0.9),
         dormant: Boolean(bond.dormant)
       };
-      simulation.bonds.set(simulation.bondKey(firstId, secondId), carriedBond);
+      simulation.bonds.set(simulation.bondKey(bond.firstId, bond.secondId), carriedBond);
     }
+    for (const [key, value] of carried.reserves ?? []) simulation.componentReserves.set(key, Math.max(0, value * 0.9));
+    simulation.births = simulation.organisms.length;
+    simulation.deaths = 0;
     simulation.nextOrganismId = nextId;
     simulation.bondGroupsCache = null;
     this.carriedComponentSize = carried.members.length;
