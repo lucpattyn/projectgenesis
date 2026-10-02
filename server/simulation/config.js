@@ -204,6 +204,17 @@ export const BASE_CONFIG = {
       directionBias: 0.8,
       minimumFacetStrength: 0.7
     },
+    gateDiscovery: {
+      // Local, switchable gate reports exchanged through nearby contacts/bonds.
+      enabled: true,
+      detectionRadius: 10,
+      maximumHops: 4,
+      pulseAttenuationPerHop: 0.82,
+      reportTtlTicks: 36,
+      minimumReports: 2,
+      minimumConfidence: 0.35,
+      confidenceDecay: 0.96
+    },
     collectiveStride: {
       // Experimental logistics mechanism: an intact gate-seeking component avoids redundant individual locomotion.
       // It reduces only the already-paid movement cost; it never creates or transfers energy.

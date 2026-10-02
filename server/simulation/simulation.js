@@ -109,6 +109,9 @@ export class Simulation {
     this.overflowPlumeFoodReleased = 0;
     this.workGates = [];
     this.gateFacetAssignments = new Map();
+    this.gateDiscoveryReports = new Map();
+    this.gateDiscoveryTargets = new Map();
+    this.gateDiscoveryStats = { sightings: 0, relays: 0, consensuses: 0 };
     this.collectiveWorkCompletions = 0;
     this.collectiveWorkFoodReleased = 0;
     this.collectiveWorkAttendances = 0;
@@ -265,6 +268,7 @@ export class Simulation {
 
     const coupledIds = this.getCoupledIds();
     this.updateComponentLifecycle();
+    this.updateGateDiscovery();
     const collectiveStrideEligibleIds = this.getCollectiveStrideEligibleIds();
     const migrationTransportEligibleIds = this.getMigrationTransportEligibleIds();
     this.organisms.forEach((organism) => { organism.collectiveTransportActive = migrationTransportEligibleIds.has(organism.id); });
@@ -1713,6 +1717,9 @@ export class Simulation {
     this.collectiveWorkFieldHarvestsByWorkers = 0;
     this.collectiveWorkFieldHarvestsByOthers = 0;
     this.gateFacetAssignments.clear();
+    this.gateDiscoveryReports.clear();
+    this.gateDiscoveryTargets.clear();
+    this.gateDiscoveryStats = { sightings: 0, relays: 0, consensuses: 0 };
     this.collectiveGateNavigationMoves = 0;
     this.collectivePlumeNavigationMoves = 0;
     this.collectiveGateArrivals = 0;
@@ -3687,6 +3694,80 @@ export class Simulation {
     if (this.starvationDiagnostics.length > 1000) this.starvationDiagnostics.shift();
   }
 
+  updateGateDiscovery() {
+    const policy = this.config.collectiveWork.gateDiscovery;
+    if (!policy?.enabled) {
+      this.gateDiscoveryTargets.clear();
+      return;
+    }
+    const alive = this.organisms.filter((organism) => organism.alive);
+    const byId = new Map(alive.map((organism) => [organism.id, organism]));
+    const reports = new Map();
+    for (const organism of alive) {
+      const gate = this.workGates
+        .filter((candidate) => !candidate.exhausted && candidate.cooldown <= 0)
+        .map((candidate) => ({ candidate, distance: this.distanceToGate(organism, candidate) }))
+        .filter(({ distance }) => distance <= policy.detectionRadius)
+        .sort((first, second) => first.distance - second.distance || first.candidate.id - second.candidate.id)[0];
+      if (!gate) continue;
+      const dx = gate.candidate.x - organism.x;
+      const dy = gate.candidate.y - organism.y;
+      reports.set(organism.id, {
+        gateId: gate.candidate.id,
+        dx, dy,
+        distance: gate.distance,
+        phase: gate.candidate.phase,
+        stock: gate.candidate.energyStock,
+        confidence: 1,
+        expiresTick: this.simulationTicks + policy.reportTtlTicks,
+        sourceId: organism.id
+      });
+      this.gateDiscoveryStats.sightings += 1;
+    }
+    for (let hop = 0; hop < policy.maximumHops; hop += 1) {
+      for (const bond of this.bonds.values()) {
+        for (const [fromId, toId] of [[bond.firstId, bond.secondId], [bond.secondId, bond.firstId]]) {
+          const report = reports.get(fromId);
+          if (!report || report.confidence <= policy.minimumConfidence) continue;
+          const target = byId.get(toId);
+          if (!target) continue;
+          const relayed = { ...report, dx: report.dx + (byId.get(fromId)?.x ?? target.x) - target.x, dy: report.dy + (byId.get(fromId)?.y ?? target.y) - target.y, confidence: report.confidence * policy.pulseAttenuationPerHop, sourceId: fromId };
+          const existing = reports.get(toId);
+          if (!existing || relayed.confidence > existing.confidence) {
+            reports.set(toId, relayed);
+            this.gateDiscoveryStats.relays += 1;
+          }
+        }
+      }
+    }
+    this.gateDiscoveryReports = reports;
+    const activeGroups = this.getBondGroups();
+    const activeKeys = new Set();
+    for (const group of activeGroups) {
+      const key = this.componentLifecycleKey(group);
+      activeKeys.add(key);
+      const votes = new Map();
+      for (const id of group) {
+        const report = reports.get(id);
+        if (!report || report.expiresTick < this.simulationTicks || report.confidence < policy.minimumConfidence) continue;
+        const vote = votes.get(report.gateId) ?? { count: 0, confidence: 0 };
+        vote.count += 1; vote.confidence += report.confidence;
+        votes.set(report.gateId, vote);
+      }
+      const winner = [...votes.entries()]
+        .filter(([, vote]) => vote.count >= policy.minimumReports && vote.confidence / vote.count >= policy.minimumConfidence)
+        .sort((first, second) => second[1].count - first[1].count || second[1].confidence - first[1].confidence)[0];
+      if (winner) {
+        const gate = this.workGates.find((candidate) => candidate.id === winner[0]);
+        if (gate && !gate.exhausted && gate.cooldown <= 0) {
+          if (this.gateDiscoveryTargets.get(key) !== gate.id) this.gateDiscoveryStats.consensuses += 1;
+          this.gateDiscoveryTargets.set(key, gate.id);
+        }
+      }
+    }
+    for (const key of this.gateDiscoveryTargets.keys()) if (!activeKeys.has(key)) this.gateDiscoveryTargets.delete(key);
+  }
+
   getGateNavigationTarget(members) {
     const navigation = this.config.collectiveWork.navigation;
     if (!navigation.enabled) return null;
@@ -3698,6 +3779,10 @@ export class Simulation {
       .sort((first, second) => second.strength - first.strength || first.key.localeCompare(second.key));
     const facet = eligibleFacets[0];
     if (!facet) return null;
+    const componentKey = this.componentLifecycleKey(members.map((member) => member.id));
+    const discoveredGateId = this.gateDiscoveryTargets.get(componentKey);
+    const discoveredGate = this.workGates.find((gate) => gate.id === discoveredGateId && !gate.exhausted && gate.cooldown <= 0);
+    if (discoveredGate) return { gate: discoveredGate, facetKey: facet.key, committed: false, discovered: true };
     const committedGateId = this.gateFacetAssignments.get(facet.key);
     const committedGate = this.workGates.find((gate) => gate.id === committedGateId);
     if (committedGate) return { gate: committedGate, facetKey: facet.key, committed: true };
@@ -4509,6 +4594,12 @@ export class Simulation {
         navigationMoves: this.collectiveGateNavigationMoves,
         plumeNavigationMoves: this.collectivePlumeNavigationMoves,
         navigationArrivals: this.collectiveGateArrivals,
+        gateDiscovery: {
+          ...this.config.collectiveWork.gateDiscovery,
+          ...this.gateDiscoveryStats,
+          activeTargets: this.gateDiscoveryTargets.size,
+          activeReports: this.gateDiscoveryReports.size
+        },
         activeAssignments: this.gateFacetAssignments.size,
         satietyMigrationDeferrals: this.satietyMigrationDeferrals,
         activeFields: this.workGates.filter((gate) => gate.fieldStrength > 0).length,
