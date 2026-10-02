@@ -3534,9 +3534,13 @@ export class Simulation {
     const group = this.getBondGroups().find((members) => members.includes(source.id));
     if (!group || group.length < policy.minimumComponentSize) return 0;
     const floor = this.getReproductionEnergyFloor(source);
+    const resourceFunded = this.config.bond.resourceFundedSurvival?.enabled;
+    const contributionFraction = resourceFunded
+      ? Number(this.config.bond.resourceFundedSurvival.harvestContributionFraction ?? policy.contributionFraction)
+      : policy.contributionFraction;
     const key = this.componentReserveKey(group);
     const current = this.componentReserves.get(key) ?? 0;
-    const amount = Math.min(Math.max(0, source.energy - floor), mealEnergy * policy.contributionFraction, Math.max(0, policy.maximumReserve - current));
+    const amount = Math.min(Math.max(0, source.energy - floor), mealEnergy * contributionFraction, Math.max(0, policy.maximumReserve - current));
     if (amount <= 0) return 0;
     source.energy -= amount;
     this.componentReserves.set(key, current + amount);
@@ -3554,27 +3558,41 @@ export class Simulation {
       let reserve = this.componentReserves.get(key) ?? 0;
       const ids = new Set(group);
       const members = group.map((id) => this.organisms.find((organism) => organism.id === id)).filter((member) => member?.alive);
-      // The shared reserve must repair member deficits before it pays any edge.
+      // Reserve order is deliberate: keep the source's survival floor (handled
+      // at harvest), protect a reproduction slice, then support members, then
+      // fund bond reserves. A shortage must not silently consume future birth
+      // capital in order to top up a transient deficit.
+      const resourceFunded = Boolean(this.config.bond.resourceFundedSurvival?.enabled);
+      const protectedReproduction = resourceFunded
+        ? Math.min(policy.reproductionReserve, reserve * policy.reproductionReserveFraction)
+        : 0;
+      let spendableReserve = Math.max(0, reserve - protectedReproduction);
       const supportTarget = this.config.bond.supportThreshold;
+      const memberSupportTransfer = resourceFunded
+        ? Number(this.config.bond.resourceFundedSurvival.memberSupportTransferPerTick ?? policy.memberSupportTransferPerTick)
+        : policy.memberSupportTransferPerTick;
       for (const member of members.sort((a, b) => a.energy - b.energy)) {
-        if (reserve <= 0 || member.energy >= supportTarget) continue;
+        if (spendableReserve <= 0 || member.energy >= supportTarget) continue;
         const need = supportTarget - member.energy;
-        const amount = Math.min(reserve, policy.memberSupportTransferPerTick, need);
+        const amount = Math.min(spendableReserve, memberSupportTransfer, need);
         if (amount <= 0) continue;
         member.energy += amount;
-        reserve -= amount;
+        spendableReserve -= amount;
         this.componentReserveWithdrawn += amount;
         this.componentReserveMemberSupport += amount;
       }
-      // Keep a protected slice for structural reproduction; only the remainder
-      // may be routed into bond reserves.
-      const protectedReproduction = Math.min(policy.reproductionReserve, reserve * policy.reproductionReserveFraction);
-      let bondBudget = Math.max(0, reserve - protectedReproduction);
+      const legacyProtectedReproduction = resourceFunded
+        ? 0
+        : Math.min(policy.reproductionReserve, spendableReserve * policy.reproductionReserveFraction);
+      let bondBudget = Math.max(0, spendableReserve - legacyProtectedReproduction);
+      const maintenanceTransfer = resourceFunded
+        ? Number(this.config.bond.resourceFundedSurvival.maintenanceTransferPerTick ?? policy.maintenanceTransferPerTick)
+        : policy.maintenanceTransferPerTick;
       const bonds = [...this.bonds.values()].filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId))
         .sort((a, b) => (a.reserve ?? 0) - (b.reserve ?? 0));
       for (const bond of bonds) {
         if (bondBudget <= 0) break;
-        const amount = Math.min(bondBudget, policy.maintenanceTransferPerTick, Math.max(0, this.config.bond.reserveCapacity - (bond.reserve ?? 0)));
+        const amount = Math.min(bondBudget, maintenanceTransfer, Math.max(0, this.config.bond.reserveCapacity - (bond.reserve ?? 0)));
         if (amount <= 0) continue;
         bond.reserve = (bond.reserve ?? 0) + amount;
         if (policy.commitmentEnabled) {
@@ -3583,12 +3601,12 @@ export class Simulation {
             (bond.componentCommitment ?? 0) + amount * policy.commitmentGainPerEnergy
           );
         }
-        reserve -= amount;
+        spendableReserve -= amount;
         bondBudget -= amount;
         this.componentReserveWithdrawn += amount;
         this.componentReserveBondFunding += amount;
       }
-      this.componentReserves.set(key, Math.max(0, reserve * (1 - policy.reserveDecayPerTick)));
+      this.componentReserves.set(key, Math.max(0, (resourceFunded ? protectedReproduction + spendableReserve : spendableReserve) * (1 - policy.reserveDecayPerTick)));
     }
     for (const key of this.componentReserves.keys()) if (!activeKeys.has(key)) this.componentReserves.delete(key);
   }
@@ -4072,6 +4090,22 @@ export class Simulation {
     return wrappedX <= 2 && wrappedY <= 2;
   }
 
+  hasEnvironmentalWakeCue(position) {
+    const policy = this.config.bond.dormantBonds;
+    if (!policy?.enabled) return false;
+    const radius = Math.max(1, Math.round(policy.wakeRadius ?? 6));
+    if (policy.wakeOnFood) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const target = this.world.wrapPosition(position.x + dx, position.y + dy);
+          if (this.world.tiles[target.y]?.[target.x]?.type === TILE_TYPES.FOOD) return true;
+        }
+      }
+    }
+    if (policy.wakeOnGate && this.workGates.some((gate) => !gate.exhausted && this.distanceToGate(position, gate) <= radius)) return true;
+    return false;
+  }
+
   isElasticTetherBondWithinLeash(bond) {
     if (!bond?.elasticScout) return false;
     const policy = this.config.bond.topologyMemory?.tetheredScout;
@@ -4122,7 +4156,11 @@ export class Simulation {
         bond.componentCommitment = (bond.componentCommitment ?? 0) * componentReservePolicy.commitmentDecayRate;
       }
       const reserveBeforeMaintenance = bond.reserve ?? this.config.bond.initialReserve;
-      bond.reserve = Math.max(0, reserveBeforeMaintenance - this.config.bond.maintenancePerTick);
+      const dormantPolicy = this.config.bond.dormantBonds;
+      const maintenanceMultiplier = dormantPolicy?.enabled && bond.dormant
+        ? Number(dormantPolicy.maintenanceMultiplier ?? 1)
+        : 1;
+      bond.reserve = Math.max(0, reserveBeforeMaintenance - this.config.bond.maintenancePerTick * maintenanceMultiplier);
       this.energyEconomics.expenses.bondReserveMaintenance += reserveBeforeMaintenance - bond.reserve;
     }
     let candidates = this.organisms.filter((organism) => organism.alive && organism.brainExecution?.effectors.bind >= 0.35);
@@ -4224,6 +4262,7 @@ export class Simulation {
           topologyLastPulseTick: null,
           lastPulseTick: null,
           lastPulseEvent: null,
+          dormant: false,
           inherited: this.structuralBirthSeeds.has(key)
         });
         this.structuralBirthSeeds.delete(key);
@@ -4314,6 +4353,22 @@ export class Simulation {
           : !first || !second ? "member was removed" : "members separated";
         this.recordBondBreak(bond, reason, deadMember ? `member died: ${deadMember.deathReason ?? "unknown cause"}` : reason);
       } else if (!this.bondCandidates.has(key)) {
+        const dormantPolicy = this.config.bond.dormantBonds;
+        const wakeCue = dormantPolicy?.enabled
+          && (this.hasEnvironmentalWakeCue(first) || this.hasEnvironmentalWakeCue(second));
+        if (dormantPolicy?.enabled && this.areAdjacent(first, second)
+          && (bond.reserve ?? 0) >= Number(dormantPolicy.minimumReserve ?? 0.5)) {
+          if (bond.dormant && wakeCue) {
+            bond.dormant = false;
+            this.bondCandidates.set(key, 1);
+            continue;
+          }
+          if (!wakeCue) {
+            bond.dormant = true;
+            bond.strength = Math.max(0.2, bond.strength);
+            continue;
+          }
+        }
         const support = this.config.guidedStructuralIntelligence?.supportedDevelopment;
         if (support?.enabled && support.preserveExistingBonds
           && this.areAdjacent(first, second) && (bond.reserve ?? 0) > 0) {
@@ -4407,6 +4462,7 @@ export class Simulation {
   }
 
   applyGuidedDevelopmentSupport() {
+    if (this.config.bond.resourceFundedSurvival?.enabled) return;
     const mode = this.config.guidedStructuralIntelligence?.supportedDevelopment;
     if (!this.guidedInput.enabled || !mode?.enabled || mode.maintenanceBudgetPerTick <= 0) return;
     this.guidedSupportCredits *= Number(mode.supportCreditDecay ?? 1);
@@ -4651,6 +4707,9 @@ export class Simulation {
       signal: { ...this.config.signal },
       bonding: {
         ...this.config.bond,
+        resourceFundedSurvival: {
+          ...this.config.bond.resourceFundedSurvival
+        },
         relayTransfers: this.bondRelayTransfers,
         relayEnergyWithdrawn: Number(this.bondRelayEnergyWithdrawn.toFixed(3)),
         relayEnergyDelivered: Number(this.bondRelayEnergyDelivered.toFixed(3)),

@@ -5,8 +5,18 @@ import { DEFAULT_CONFIG } from "./simulation/config.js";
 import { Simulation } from "./simulation/simulation.js";
 import { ExperimentRunner } from "./experiments/experiment-runner.js";
 import { GuidedImageTaskRunner } from "./experiments/guided-image-task-runner.js";
+import { ReincarnationController } from "./simulation/reincarnation.js";
 
 const simulation = new Simulation(DEFAULT_CONFIG);
+const reincarnation = new ReincarnationController({ cycleTicks: 1000, seed: DEFAULT_CONFIG.universe.initialSeed, enabled: true });
+const originalSimulationStep = simulation.step.bind(simulation);
+simulation.stop();
+simulation.step = () => {
+  originalSimulationStep();
+  reincarnation.observe(simulation);
+};
+reincarnation.applyRecipe(simulation, reincarnation.chooseRecipe());
+simulation.start();
 const publicDir = join(process.cwd(), "public");
 const experimentRunner = new ExperimentRunner(join(process.cwd(), "data", "experiment-history.json"));
 const guidedImageTaskRunner = new GuidedImageTaskRunner({ root: process.cwd() });
@@ -89,7 +99,7 @@ async function readRequestBody(request) {
 
 async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/state") {
-    sendJson(response, 200, simulation.getSnapshot());
+    sendJson(response, 200, { ...simulation.getSnapshot(), reincarnation: reincarnation.snapshot(simulation) });
     return true;
   }
 
@@ -195,6 +205,14 @@ async function handleApi(request, response, url) {
 
     if (body.guidedUnconditionalSupportEnabled !== undefined) {
       simulation.config.guidedStructuralIntelligence.supportedDevelopment.unconditionalSupportEnabled = Boolean(body.guidedUnconditionalSupportEnabled);
+    }
+
+    if (body.guidedMovementSuppressionEnabled !== undefined) {
+      simulation.config.guidedStructuralIntelligence.supportedDevelopment.suppressMovement = Boolean(body.guidedMovementSuppressionEnabled);
+    }
+
+    if (body.resourceFundedSurvivalEnabled !== undefined) {
+      simulation.config.bond.resourceFundedSurvival.enabled = Boolean(body.resourceFundedSurvivalEnabled);
     }
 
     if (body.courierEnabled !== undefined) {

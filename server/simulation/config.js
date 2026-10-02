@@ -346,6 +346,23 @@ export const BASE_CONFIG = {
     surplusFirstEnergy: {
       enabled: false
     },
+    // Resource-funded comparison mode: physical harvest may fund local
+    // component reserves, while the legacy guided support wallet is bypassed.
+    resourceFundedSurvival: {
+      enabled: false,
+      // These are bounded physical-transfer limits, not generated energy.
+      harvestContributionFraction: 0.2,
+      memberSupportTransferPerTick: 1.2,
+      maintenanceTransferPerTick: 0.6
+    },
+    dormantBonds: {
+      enabled: true,
+      maintenanceMultiplier: 0.2,
+      wakeRadius: 6,
+      minimumReserve: 0.5,
+      wakeOnFood: true,
+      wakeOnGate: true
+    },
     componentReserveEconomy: {
       enabled: true,
       contributionFraction: 0.08,

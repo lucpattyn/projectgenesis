@@ -947,6 +947,13 @@ input[type="range"] {
   white-space: nowrap;
 }
 
+.reincarnation-counter {
+  color: #9bd8c2;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 #world-scroll {
   position: relative;
   flex: 1;

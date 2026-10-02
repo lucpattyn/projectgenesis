@@ -5,6 +5,7 @@ const statsGrid = document.getElementById("stats-grid");
 const statusPill = document.getElementById("status-pill");
 const tickCounter = document.getElementById("tick-counter");
 const canvasTickCounter = document.getElementById("canvas-tick-counter");
+const reincarnationCounter = document.getElementById("reincarnation-counter");
 const speedSelect = document.getElementById("speed-select");
 const foodGrowthInput = document.getElementById("food-growth");
 const foodGrowthValue = document.getElementById("food-growth-value");
@@ -384,6 +385,13 @@ function syncControls(snapshot) {
   statusPill.textContent = snapshot.controls.paused ? "Paused" : "Running";
   tickCounter.textContent = `Tick ${snapshot.statistics.tick ?? 0}`;
   canvasTickCounter.textContent = `Tick ${snapshot.statistics.tick ?? 0}`;
+  const reincarnation = snapshot.reincarnation;
+  if (reincarnationCounter && reincarnation) {
+    const recipe = reincarnation.currentRecipe?.name ?? "initializing";
+    const lastScore = reincarnation.lastResult?.score;
+    reincarnationCounter.textContent = `Cycle ${reincarnation.cycle} · ${recipe}${lastScore === undefined ? "" : ` · score ${lastScore}`}`;
+    reincarnationCounter.title = `Automatic world renewal every ${reincarnation.cycleTicks} ticks. ${reincarnation.nextReason}`;
+  }
   const guided = snapshot.guidedStructuralIntelligence ?? {};
   guidedInputEnabledInput.checked = Boolean(guided.enabled);
   guidedSupportEnabledInput.checked = Boolean(guided.supportedDevelopment?.enabled);
