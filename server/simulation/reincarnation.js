@@ -12,6 +12,7 @@ export class ReincarnationController {
     this.recipe = null;
     this.lastResult = null;
     this.nextReason = "initial world";
+    this.carriedComponentSize = 0;
   }
 
   recipes() {
@@ -68,7 +69,83 @@ export class ReincarnationController {
     return recipes[(best.recipeIndex + 1) % recipes.length];
   }
 
-  applyRecipe(simulation, recipe) {
+  captureComponent(simulation) {
+    const groups = simulation.getBondGroups().filter((group) => group.length > 3);
+    if (!groups.length) return null;
+    const group = groups.sort((a, b) => b.length - a.length)[0];
+    const ids = new Set(group);
+    const members = group
+      .map((id) => simulation.organisms.find((organism) => organism.id === id))
+      .filter((organism) => organism?.alive);
+    if (members.length < 4) return null;
+    const origin = members[0];
+    return {
+      members,
+      positions: members.map((member) => ({ id: member.id, dx: member.x - origin.x, dy: member.y - origin.y })),
+      bonds: [...simulation.bonds.values()]
+        .filter((bond) => ids.has(bond.firstId) && ids.has(bond.secondId))
+        .map((bond) => ({ ...bond }))
+    };
+  }
+
+  restoreComponent(simulation, carried) {
+    if (!carried) {
+      this.carriedComponentSize = 0;
+      return;
+    }
+    const occupied = new Set(simulation.organisms.map((organism) => `${organism.x},${organism.y}`));
+    const offsets = carried.positions;
+    let anchor = null;
+    for (let y = 4; y < simulation.world.height - 4 && !anchor; y += 1) {
+      for (let x = 4; x < simulation.world.width - 4 && !anchor; x += 1) {
+        const cells = offsets.map((offset) => simulation.world.wrapPosition(x + offset.dx, y + offset.dy));
+        if (cells.every((cell) => !occupied.has(`${cell.x},${cell.y}`))) anchor = { x, y };
+      }
+    }
+    if (!anchor) {
+      this.carriedComponentSize = 0;
+      return;
+    }
+    const idMap = new Map();
+    let nextId = Math.max(0, ...simulation.organisms.map((organism) => organism.id)) + 1;
+    for (const member of carried.members) {
+      const oldId = member.id;
+      const newId = nextId;
+      nextId += 1;
+      idMap.set(oldId, newId);
+      member.id = newId;
+      member.alive = true;
+      member.energy = Math.max(1, Math.min(member.energy, simulation.config.organism.startingEnergy * 1.25));
+      member.age = Math.min(member.age, Math.floor(simulation.config.organism.maxAge * 0.5) || member.age);
+      const offset = offsets.find((item) => item.id === oldId);
+      const cell = simulation.world.wrapPosition(anchor.x + offset.dx, anchor.y + offset.dy);
+      member.x = cell.x;
+      member.y = cell.y;
+      member.collectiveStrideActive = false;
+      member.collectiveTransportActive = false;
+      simulation.organisms.push(member);
+      occupied.add(`${cell.x},${cell.y}`);
+      if (member.lineageId !== undefined) simulation.lineageBirthTicks.set(member.lineageId, -member.age);
+    }
+    for (const bond of carried.bonds) {
+      const firstId = idMap.get(bond.firstId);
+      const secondId = idMap.get(bond.secondId);
+      if (firstId === undefined || secondId === undefined) continue;
+      const carriedBond = {
+        ...bond,
+        firstId,
+        secondId,
+        reserve: Math.max(0, (bond.reserve ?? 0) * 0.9),
+        dormant: Boolean(bond.dormant)
+      };
+      simulation.bonds.set(simulation.bondKey(firstId, secondId), carriedBond);
+    }
+    simulation.nextOrganismId = nextId;
+    simulation.bondGroupsCache = null;
+    this.carriedComponentSize = carried.members.length;
+  }
+
+  applyRecipe(simulation, recipe, carried = null) {
     simulation.config.bond.resourceFundedSurvival.enabled = Boolean(recipe.resourceFunded);
     simulation.config.bond.dormantBonds.enabled = Boolean(recipe.dormantBonds);
     simulation.config.collectiveWork.gateDiscovery.enabled = Boolean(recipe.gateDiscovery);
@@ -81,6 +158,7 @@ export class ReincarnationController {
     simulation.config.guidedStructuralIntelligence.supportedDevelopment.unconditionalSupportEnabled = false;
     this.recipe = { ...recipe };
     simulation.setSeed(this.seed + this.generation * 9973 + this.cycle * 101);
+    this.restoreComponent(simulation, carried);
     simulation.resume();
   }
 
@@ -114,6 +192,7 @@ export class ReincarnationController {
 
   observe(simulation) {
     if (!this.enabled || simulation.simulationTicks < this.cycleTicks) return false;
+    const carried = this.captureComponent(simulation);
     const result = this.score(simulation);
     const completed = {
       generation: this.generation,
@@ -129,7 +208,7 @@ export class ReincarnationController {
     this.cycle += 1;
     const next = this.chooseRecipe();
     this.nextReason = result.score < 10 ? "low structural/interaction score; exploring new recipe" : "cycling for comparison and novelty";
-    this.applyRecipe(simulation, next);
+    this.applyRecipe(simulation, next, carried);
     return true;
   }
 
@@ -144,6 +223,7 @@ export class ReincarnationController {
       ticksRemaining: Math.max(0, this.cycleTicks - tick),
       nextReason: this.nextReason,
       lastResult: this.lastResult,
+      carriedComponentSize: this.carriedComponentSize,
       history: this.history.slice(-this.maximumHistory)
     };
   }

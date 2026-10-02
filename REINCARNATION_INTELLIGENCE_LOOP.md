@@ -27,6 +27,10 @@ The score rewards:
 
 Low-scoring cycles are explicitly marked as exploration. A high score is not a claim of intelligence; it is a cue for the next controlled comparison.
 
+## Topology continuity
+
+At the boundary, the strongest connected component with at least four living members is carried into the next world. Its relative geometry, local controller state, traces, and bond reserves survive with a 10% reserve transition loss. New organisms and the environmental field are still seeded afresh around it. This creates a controlled continuity test: a morphology can encounter a new world, interact with new resources, and either adapt, consolidate, or fail.
+
 ## Live observability
 
 The API snapshot exposes `reincarnation` with the current recipe, cycle, generation, remaining ticks, last score, and bounded history. The live canvas header displays the cycle and recipe. The default branch behavior is not changed by this work; this branch starts the loop enabled for observation.
