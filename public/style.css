@@ -983,6 +983,16 @@ input[type="range"] {
   background: #08131a;
 }
 
+.world-config-hint {
+  margin: 7px 2px 0;
+  color: rgba(190, 222, 214, 0.68);
+  font: 500 0.68rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .guided-input-block canvas {
   display: block;
   width: 160px;

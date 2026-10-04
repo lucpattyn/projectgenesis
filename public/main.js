@@ -6,6 +6,7 @@ const statusPill = document.getElementById("status-pill");
 const tickCounter = document.getElementById("tick-counter");
 const canvasTickCounter = document.getElementById("canvas-tick-counter");
 const reincarnationCounter = document.getElementById("reincarnation-counter");
+const worldConfigHint = document.getElementById("world-config-hint");
 const speedSelect = document.getElementById("speed-select");
 const foodGrowthInput = document.getElementById("food-growth");
 const foodGrowthValue = document.getElementById("food-growth-value");
@@ -393,6 +394,17 @@ function syncControls(snapshot) {
     const lastScore = reincarnation.lastResult?.score;
     reincarnationCounter.textContent = `Cycle ${reincarnation.cycle} · ${recipe}${lastScore === undefined ? "" : ` · score ${lastScore}`}`;
     reincarnationCounter.title = `Automatic world renewal every ${reincarnation.cycleTicks} ticks. ${reincarnation.nextReason}`;
+    if (worldConfigHint) {
+      const currentRecipe = reincarnation.currentRecipe ?? {};
+      const carry = reincarnation.lastCarry;
+      const carryText = carry?.members
+        ? `carry ${carry.members} members/${carry.bonds ?? 0} bonds`
+        : "no carried structure yet";
+      const navigation = currentRecipe.navigation ? "navigation on" : "navigation off";
+      const discovery = currentRecipe.gateDiscovery ? "gate sensing on" : "gate sensing off";
+      worldConfigHint.textContent = `World ${snapshot.settings.worldNumber} · seed ${snapshot.settings.universeSeed} · ${recipe} · ${discovery} · ${navigation} · ${carryText}`;
+      worldConfigHint.title = "Compact live recipe hint; full configuration and cycle history are available from /api/state.";
+    }
   }
   const guided = snapshot.guidedStructuralIntelligence ?? {};
   guidedInputEnabledInput.checked = Boolean(guided.enabled);
