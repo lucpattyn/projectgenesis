@@ -65,6 +65,8 @@ const guidedTaskStatus = document.getElementById("guided-task-status");
 const renderer = new Renderer(canvas);
 let currentSnapshot = null;
 let selectedOrganismId = null;
+let snapshotRequestInFlight = false;
+let lastRenderedSnapshotVersion = -1;
 
 function renderGuidedTaskStatus(status) {
   if (!guidedTaskStatus || !status) return;
@@ -435,11 +437,25 @@ function renderSnapshot(snapshot) {
 }
 
 async function loadSnapshot() {
+  // State snapshots contain the full world and can be expensive to serialize
+  // and draw. Keep polling single-flight so a slow response cannot be overtaken
+  // by a newer request and rendered out of order.
+  if (snapshotRequestInFlight) return;
+  snapshotRequestInFlight = true;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 4000);
   try {
-    const snapshot = await fetchJson("/api/state");
-    renderSnapshot(snapshot);
+    const snapshot = await fetchJson("/api/state", { signal: controller.signal });
+    const version = Number(snapshot.version ?? 0);
+    if (version >= lastRenderedSnapshotVersion) {
+      lastRenderedSnapshotVersion = version;
+      renderSnapshot(snapshot);
+    }
   } catch (error) {
     statusPill.textContent = "Connection Error";
+  } finally {
+    window.clearTimeout(timeout);
+    snapshotRequestInFlight = false;
   }
 }
 
@@ -599,6 +615,15 @@ canvas.addEventListener("click", (event) => {
 loadSnapshot();
 loadExperiments();
 refreshGuidedTaskStatus();
-setInterval(loadSnapshot, 200);
+// A complete canvas/world redraw is intentionally throttled. The simulation
+// continues at its configured speed while the UI samples it at a stable rate.
+const snapshotPollIntervalMs = 500;
+const scheduleSnapshotPoll = () => {
+  window.setTimeout(async () => {
+    await loadSnapshot();
+    scheduleSnapshotPoll();
+  }, snapshotPollIntervalMs);
+};
+scheduleSnapshotPoll();
 setInterval(loadExperiments, 1000);
 setInterval(refreshGuidedTaskStatus, 2000);
